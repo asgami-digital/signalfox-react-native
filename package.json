@@ -14,6 +14,7 @@
   },
   "files": [
     "src",
+    "types",
     "lib",
     "android",
     "ios",
@@ -34,7 +35,7 @@
   "scripts": {
     "example": "yarn workspace @asgami/signalfox-react-native-example",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
-    "prepare": "bob build",
+    "prepare": "bob build && node ./scripts/ensure-rn-augmentation-in-lib-types.mjs",
     "typecheck": "tsc",
     "test": "jest",
     "release": "release-it --only-version",
