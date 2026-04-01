@@ -1,3 +1,4 @@
+import '@asgami-digital/signalfox-react-native/react-native-augmentations';
 import { useMemo, useState } from 'react';
 import {
   Alert,

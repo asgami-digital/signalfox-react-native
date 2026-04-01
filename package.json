@@ -10,12 +10,20 @@
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
     },
+    "./react-native-augmentations": {
+      "types": "./react-native-augmentations.d.ts",
+      "import": "./react-native-augmentations.js",
+      "require": "./react-native-augmentations.js",
+      "default": "./react-native-augmentations.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "types",
     "lib",
+    "react-native-augmentations.js",
+    "react-native-augmentations.d.ts",
     "android",
     "ios",
     "cpp",
