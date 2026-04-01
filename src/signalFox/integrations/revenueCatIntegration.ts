@@ -48,19 +48,87 @@ function extractErrorInfo(err: unknown): {
   };
 }
 
-function extractCustomerInfoSummary(customerInfo: unknown): {
-  entitlementIds?: string[];
-  originalAppUserId?: string;
-} {
+function keysOfEntitlementMap(raw: unknown): string[] {
+  if (raw == null || typeof raw !== 'object') return [];
+  if (raw instanceof Map) {
+    return [...raw.keys()].filter((k) => typeof k === 'string' && k.length > 0);
+  }
+  return Object.keys(raw as Record<string, unknown>);
+}
+
+function getEntitlementEntry(container: unknown, id: string): unknown {
+  if (container instanceof Map) return container.get(id);
+  if (container != null && typeof container === 'object') {
+    return (container as Record<string, unknown>)[id];
+  }
+  return undefined;
+}
+
+/**
+ * Resume CustomerInfo de RevenueCat para analytics (entitlements, subs, productos).
+ * Cubre RN/bridge donde `entitlements.active` puede venir vacío pero `all` + `isActive` sí informa.
+ */
+function extractCustomerInfoSummary(
+  customerInfo: unknown
+): Record<string, unknown> {
   const ci = customerInfo as any;
-  const active = ci?.entitlements?.active;
-  const entitlementIds =
-    active && typeof active === 'object' ? Object.keys(active) : undefined;
-  const originalAppUserId = safeString(ci?.originalAppUserId);
-  return {
-    ...(entitlementIds?.length ? { entitlementIds } : {}),
-    ...(originalAppUserId ? { originalAppUserId } : {}),
-  };
+  if (ci == null || typeof ci !== 'object') return {};
+
+  const out: Record<string, unknown> = {};
+
+  const originalAppUserId = safeString(ci.originalAppUserId);
+  if (originalAppUserId) out.originalAppUserId = originalAppUserId;
+
+  const entitlements = ci.entitlements;
+  const activeRaw = entitlements?.active;
+  let entitlementIds = keysOfEntitlementMap(activeRaw).filter(
+    (id) => getEntitlementEntry(activeRaw, id) != null
+  );
+
+  const allRaw = entitlements?.all;
+  if (entitlementIds.length === 0 && allRaw && typeof allRaw === 'object') {
+    entitlementIds = keysOfEntitlementMap(allRaw).filter((id) => {
+      const e = getEntitlementEntry(allRaw, id);
+      return (
+        e != null &&
+        typeof e === 'object' &&
+        (e as { isActive?: boolean }).isActive === true
+      );
+    });
+  }
+
+  if (entitlementIds.length > 0) out.entitlementIds = entitlementIds;
+
+  const activeSubscriptions = ci.activeSubscriptions;
+  if (Array.isArray(activeSubscriptions) && activeSubscriptions.length > 0) {
+    const ids = activeSubscriptions.filter(
+      (x) => typeof x === 'string'
+    ) as string[];
+    if (ids.length > 0) out.activeSubscriptionProductIds = ids;
+  }
+
+  const allPurchased = ci.allPurchasedProductIdentifiers;
+  if (Array.isArray(allPurchased) && allPurchased.length > 0) {
+    const ids = allPurchased.filter((x) => typeof x === 'string') as string[];
+    if (ids.length > 0) out.allPurchasedProductIdentifiers = ids;
+  }
+
+  const latestExp = safeString(ci.latestExpirationDate);
+  if (latestExp) out.latestExpirationDate = latestExp;
+
+  const firstSeen = safeString(ci.firstSeen);
+  if (firstSeen) out.customerFirstSeen = firstSeen;
+
+  return out;
+}
+
+/** MakePurchaseResult trae `customerInfo`; en algunos flujos el resultado puede ser el propio CustomerInfo. */
+function pickCustomerInfoFromPurchaseResult(result: unknown): unknown {
+  if (result == null || typeof result !== 'object') return undefined;
+  const r = result as any;
+  if (r.customerInfo != null) return r.customerInfo;
+  if (r.entitlements != null && typeof r.entitlements === 'object') return r;
+  return undefined;
 }
 
 function extractPackageInfo(pkg: unknown): {
@@ -81,6 +149,29 @@ function extractPackageInfo(pkg: unknown): {
     ...(offeringIdentifier ? { offeringIdentifier } : {}),
     ...(productId ? { productId } : {}),
   };
+}
+
+function extractStoreProductInfo(product: unknown): {
+  productId?: string;
+} {
+  const p = product as any;
+  const productId =
+    safeString(p?.identifier) ??
+    safeString(p?.productIdentifier) ??
+    safeString(p?.productId);
+  return productId ? { productId } : {};
+}
+
+function extractSubscriptionOptionInfo(opt: unknown): {
+  productId?: string;
+} {
+  const o = opt as any;
+  const productId =
+    safeString(o?.productId) ??
+    safeString(o?.id) ??
+    safeString(o?.product?.identifier) ??
+    safeString(o?.product?.productIdentifier);
+  return productId ? { productId } : {};
 }
 
 function patchAsyncMethod(
@@ -196,21 +287,109 @@ export function revenueCatIntegration(
 
       const patches: PatchRecord[] = [];
 
+      const purchaseEvents = {
+        started: 'purchase_started',
+        completed: 'purchase_completed',
+        failed: 'purchase_failed',
+      } as const;
+
       patchAsyncMethod(
         purchases,
         patches,
         core,
         'purchasePackage',
-        {
-          started: 'purchase_started',
-          completed: 'purchase_completed',
-          failed: 'purchase_failed',
-        },
+        purchaseEvents,
         (args, result, err) => {
           const pkg = args?.[0];
           const info = extractPackageInfo(pkg);
           const customerInfo =
-            (result as any)?.customerInfo ?? (result as any)?.customerInfo;
+            err != null
+              ? undefined
+              : pickCustomerInfoFromPurchaseResult(result);
+          return {
+            ...info,
+            ...extractCustomerInfoSummary(customerInfo),
+            ...extractErrorInfo(err),
+          };
+        }
+      );
+
+      patchAsyncMethod(
+        purchases,
+        patches,
+        core,
+        'purchaseStoreProduct',
+        purchaseEvents,
+        (args, result, err) => {
+          const product = args?.[0];
+          const info = extractStoreProductInfo(product);
+          const customerInfo =
+            err != null
+              ? undefined
+              : pickCustomerInfoFromPurchaseResult(result);
+          return {
+            ...info,
+            ...extractCustomerInfoSummary(customerInfo),
+            ...extractErrorInfo(err),
+          };
+        }
+      );
+
+      patchAsyncMethod(
+        purchases,
+        patches,
+        core,
+        'purchaseSubscriptionOption',
+        purchaseEvents,
+        (args, result, err) => {
+          const opt = args?.[0];
+          const info = extractSubscriptionOptionInfo(opt);
+          const customerInfo =
+            err != null
+              ? undefined
+              : pickCustomerInfoFromPurchaseResult(result);
+          return {
+            ...info,
+            ...extractCustomerInfoSummary(customerInfo),
+            ...extractErrorInfo(err),
+          };
+        }
+      );
+
+      patchAsyncMethod(
+        purchases,
+        patches,
+        core,
+        'purchaseDiscountedPackage',
+        purchaseEvents,
+        (args, result, err) => {
+          const pkg = args?.[0];
+          const info = extractPackageInfo(pkg);
+          const customerInfo =
+            err != null
+              ? undefined
+              : pickCustomerInfoFromPurchaseResult(result);
+          return {
+            ...info,
+            ...extractCustomerInfoSummary(customerInfo),
+            ...extractErrorInfo(err),
+          };
+        }
+      );
+
+      patchAsyncMethod(
+        purchases,
+        patches,
+        core,
+        'purchaseDiscountedProduct',
+        purchaseEvents,
+        (args, result, err) => {
+          const product = args?.[0];
+          const info = extractStoreProductInfo(product);
+          const customerInfo =
+            err != null
+              ? undefined
+              : pickCustomerInfoFromPurchaseResult(result);
           return {
             ...info,
             ...extractCustomerInfoSummary(customerInfo),
@@ -224,15 +403,13 @@ export function revenueCatIntegration(
         patches,
         core,
         'purchaseProduct',
-        {
-          started: 'purchase_started',
-          completed: 'purchase_completed',
-          failed: 'purchase_failed',
-        },
+        purchaseEvents,
         (args, result, err) => {
           const productId = safeString(args?.[0]);
           const customerInfo =
-            (result as any)?.customerInfo ?? (result as any)?.customerInfo;
+            err != null
+              ? undefined
+              : pickCustomerInfoFromPurchaseResult(result);
           return {
             ...(productId ? { productId } : {}),
             ...extractCustomerInfoSummary(customerInfo),

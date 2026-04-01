@@ -1,9 +1,7 @@
 import type { BackendEventDto, BackendEventsBulkDto } from './types';
 
 // TODO: externalizar en config de entorno.
-const BASE_URL = __DEV__
-  ? 'https://api-dev.signalfox.io'
-  : 'https://api.signalfox.io';
+const BASE_URL = 'https://api.signalfox.io';
 const BULK_EVENTS_PATH = '/analytics/events/bulk';
 
 export async function sendEvents(params: {
