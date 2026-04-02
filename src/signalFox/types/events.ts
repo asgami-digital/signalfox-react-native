@@ -37,6 +37,7 @@ export interface ScreenViewEvent extends BaseAnalyticsEvent {
     screen_name: string;
     previous_screen_name?: string | null;
     navigator_context?: unknown;
+    parentModal?: string | null;
   };
 }
 
@@ -49,6 +50,7 @@ export interface ModalEventPayload {
   currentScreen?: string | null;
   screen_name?: string | null;
   presentation?: string | null;
+  parentModal?: string | null;
 }
 
 export interface ModalEvent extends BaseAnalyticsEvent {
@@ -62,6 +64,7 @@ export interface ModalEvent extends BaseAnalyticsEvent {
 export interface ComponentPressPayload {
   source: 'react_native_touchable';
   rnComponent: string;
+  parentModal?: string | null;
 }
 
 export interface ComponentPressEvent extends BaseAnalyticsEvent {

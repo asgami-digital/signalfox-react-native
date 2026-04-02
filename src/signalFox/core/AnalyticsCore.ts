@@ -21,6 +21,7 @@ import {
   isDevApiKey,
   shouldDelayScreenResolution,
 } from './constants';
+import { getActiveModalId } from './modalStack';
 
 function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -186,6 +187,20 @@ export class AnalyticsCore implements IAnalyticsCore {
     event: { type: AnalyticsEventType } & Record<string, unknown>,
     eventTimestamp: number
   ): void {
+    // Siempre adjuntamos el modal "padre" (último abierto) para enlazar jerarquías de UI.
+    // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
+    // use el modal anterior (stack después del pop).
+    const parentModal = getActiveModalId();
+    const maybePayload = (event as { payload?: unknown }).payload;
+    const nextPayload: Record<string, unknown> =
+      maybePayload &&
+      typeof maybePayload === 'object' &&
+      !Array.isArray(maybePayload)
+        ? (maybePayload as Record<string, unknown>)
+        : {};
+    nextPayload.parentModal = parentModal;
+    (event as { payload?: unknown }).payload = nextPayload;
+
     const resolvedScreenName = this.resolveScreenName(event);
 
     const fullEvent: AnalyticsEvent = {

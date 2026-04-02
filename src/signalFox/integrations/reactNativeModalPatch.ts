@@ -8,6 +8,7 @@ import type {
   AnalyticsIntegration,
   IAnalyticsCore,
 } from '../types/integration';
+import { modalStackPop, modalStackPush } from '../core/modalStack';
 
 type TrackFn = (event: { type: string } & Record<string, unknown>) => void;
 
@@ -43,6 +44,12 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   ) => {
     if (closeEmittedRef.current) return;
     closeEmittedRef.current = true;
+
+    // Para modal_close, el parent debe ser el modal "anterior" (stack después del pop).
+    if (typeof targetId === 'string' && targetId.length > 0) {
+      modalStackPop(targetId);
+    }
+
     const track = modalPatchTrackRef.current;
     if (!track) return;
     track({
@@ -70,6 +77,10 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     if (isFirstRender) {
       if (visible) {
         closeEmittedRef.current = false;
+        if (typeof targetId === 'string' && targetId.length > 0) {
+          // Para modal_open, el parentModal debe coincidir con el modal abierto.
+          modalStackPush(targetId);
+        }
         if (modalPatchTrackRef.current) {
           modalPatchTrackRef.current({
             type: 'modal_open',
@@ -91,6 +102,9 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
 
     if (prev === false && visible) {
       closeEmittedRef.current = false;
+      if (typeof targetId === 'string' && targetId.length > 0) {
+        modalStackPush(targetId);
+      }
       track({
         type: 'modal_open',
         target_id: targetId,
