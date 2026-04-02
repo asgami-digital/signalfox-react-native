@@ -46,10 +46,21 @@ export function SignalFoxProvider({
   children,
 }: SignalFoxProviderProps): React.JSX.Element {
   const coreRef = useRef<AnalyticsCore | null>(null);
+  const pendingRef = useRef<(() => void)[]>([]);
   const cleanupRef = useRef<(() => void)[]>([]);
 
   useEffect(() => {
     let isCancelled = false;
+
+    const flushPending = () => {
+      const core = coreRef.current;
+      if (!core) return;
+      const batch = pendingRef.current;
+      pendingRef.current = [];
+      for (const run of batch) {
+        run();
+      }
+    };
 
     const setup = async () => {
       const instance = new AnalyticsCore({
@@ -57,14 +68,19 @@ export function SignalFoxProvider({
         logOnly,
       });
 
+      coreRef.current = instance;
+      instance.startSession();
+
       await instance.init();
       if (isCancelled) {
         instance.destroy();
+        coreRef.current = null;
+        pendingRef.current = [];
         return;
       }
 
-      coreRef.current = instance;
-      instance.startSession();
+      flushPending();
+
       if (!isDevApiKey(apiKey)) {
         instance.startFlushTimer();
       }
@@ -78,7 +94,9 @@ export function SignalFoxProvider({
       );
     };
 
-    void setup();
+    setup().catch((error) => {
+      console.warn('[SignalFoxProvider] setup failed', error);
+    });
 
     return () => {
       isCancelled = true;
@@ -86,27 +104,53 @@ export function SignalFoxProvider({
       cleanupRef.current = [];
       coreRef.current?.destroy();
       coreRef.current = null;
+      pendingRef.current = [];
     };
   }, [apiKey, logOnly, integrations]);
 
   const stableValue = useMemo<SignalFoxContextValue>(
     () => ({
       track: (name: string, properties?: Record<string, unknown>) => {
-        coreRef.current?.track(name, properties);
+        if (coreRef.current === null) {
+          pendingRef.current.push(() =>
+            coreRef.current?.track(name, properties)
+          );
+          return;
+        }
+        coreRef.current.track(name, properties);
       },
       trackStep: (params: FlowStepParams) => {
-        coreRef.current?.trackStep(params);
+        if (coreRef.current === null) {
+          pendingRef.current.push(() => coreRef.current?.trackStep(params));
+          return;
+        }
+        coreRef.current.trackStep(params);
       },
       trackSubview: (params: SubviewParams) => {
-        coreRef.current?.trackSubview(params);
+        if (coreRef.current === null) {
+          pendingRef.current.push(() => coreRef.current?.trackSubview(params));
+          return;
+        }
+        coreRef.current.trackSubview(params);
       },
       trackEvent: (event: { type: string } & Record<string, unknown>) => {
-        coreRef.current?.trackEvent(
-          event as { type: AnalyticsEventType } & Record<string, unknown>
-        );
+        const typed = event as {
+          type: AnalyticsEventType;
+        } & Record<string, unknown>;
+        if (coreRef.current === null) {
+          pendingRef.current.push(() => coreRef.current?.trackEvent(typed));
+          return;
+        }
+        coreRef.current.trackEvent(typed);
       },
       sendEvent: (name: string, properties: Record<string, unknown>) => {
-        coreRef.current?.sendEvent?.(name, properties);
+        if (coreRef.current === null) {
+          pendingRef.current.push(() =>
+            coreRef.current?.sendEvent?.(name, properties)
+          );
+          return;
+        }
+        coreRef.current.sendEvent(name, properties);
       },
     }),
     []
