@@ -9,6 +9,7 @@ const COLUMN_KEYS = new Set([
   'screen_name',
   'previous_screen_name',
   'navigator_context',
+  'parent_modal',
   'target_id',
   'target_name',
   'target_type',
@@ -103,6 +104,9 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     os_version: null,
     properties_json: null,
   };
+
+  // Campo base/top-level (no dentro de properties_json).
+  base.parent_modal = pickOptionalString(payload?.parent_modal);
 
   switch (internalType) {
     case 'screen_view': {
@@ -208,13 +212,11 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
         raw.payload && typeof raw.payload === 'object' && raw.payload
           ? { ...(raw.payload as Record<string, unknown>) }
           : {};
-      const parent_modal = pickOptionalString(userPayload.parent_modal) ?? null;
-      // Evitamos duplicar: lo dejamos como campo directo.
+      // Evitamos duplicar/meterlo dentro de properties_json.
       delete (userPayload as Record<string, unknown>).parent_modal;
 
       base.properties_json = cleanProps({
         ...(customName ? { custom_event_name: customName } : {}),
-        parent_modal,
         payload: userPayload,
       });
       base.screen_name = pickOptionalString(raw.screen_name);

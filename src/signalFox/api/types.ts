@@ -20,6 +20,7 @@ export interface BackendEventDto {
   screen_name?: string | null;
   previous_screen_name?: string | null;
   navigator_context?: string | null;
+  parent_modal?: string | null;
 
   target_id?: string | null;
   target_name?: string | null;
