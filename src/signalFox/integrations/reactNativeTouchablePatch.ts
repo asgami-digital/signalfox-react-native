@@ -8,6 +8,7 @@ import type {
   AnalyticsIntegration,
   IAnalyticsCore,
 } from '../types/integration';
+import { getActiveModalId } from '../core/modalStack';
 
 type TrackFn = (event: { type: string } & Record<string, unknown>) => void;
 const touchableTrackRef: { current: TrackFn | null } = { current: null };
@@ -78,6 +79,9 @@ function makePatchedComponent(Original: any, componentName: string): any {
     const wrappedOnPress = (...args: any[]) => {
       const track = touchableTrackRef.current;
       if (track) {
+        // Capturamos el parent modal ANTES de ejecutar el handler original,
+        // para no perder contexto si el modal se cierra en el mismo tick.
+        const parent_modal = getActiveModalId();
         track({
           type: 'component_press',
           target_id: targetId,
@@ -86,6 +90,7 @@ function makePatchedComponent(Original: any, componentName: string): any {
           payload: {
             source: 'react_native_touchable',
             rnComponent: componentName,
+            parent_modal,
           },
         });
       }

@@ -198,7 +198,13 @@ export class AnalyticsCore implements IAnalyticsCore {
       !Array.isArray(maybePayload)
         ? (maybePayload as Record<string, unknown>)
         : {};
-    nextPayload.parentModal = parentModal;
+
+    // Si una integración ya calculó `parent_modal`, no lo sobrescribimos.
+    // Esto es importante en acciones "close" donde el stack puede cambiar
+    // inmediatamente después del evento.
+    if (typeof nextPayload.parent_modal === 'undefined') {
+      nextPayload.parent_modal = parentModal;
+    }
     (event as { payload?: unknown }).payload = nextPayload;
 
     const resolvedScreenName = this.resolveScreenName(event);

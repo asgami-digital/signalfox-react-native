@@ -208,13 +208,13 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
         raw.payload && typeof raw.payload === 'object' && raw.payload
           ? { ...(raw.payload as Record<string, unknown>) }
           : {};
-      const parentModal = pickOptionalString(userPayload.parentModal) ?? null;
+      const parent_modal = pickOptionalString(userPayload.parent_modal) ?? null;
       // Evitamos duplicar: lo dejamos como campo directo.
-      delete (userPayload as Record<string, unknown>).parentModal;
+      delete (userPayload as Record<string, unknown>).parent_modal;
 
       base.properties_json = cleanProps({
         ...(customName ? { custom_event_name: customName } : {}),
-        parentModal,
+        parent_modal,
         payload: userPayload,
       });
       base.screen_name = pickOptionalString(raw.screen_name);

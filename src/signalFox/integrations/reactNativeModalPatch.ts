@@ -2,7 +2,7 @@
  * Monkey-patch de react-native Modal para detectar open/close según `visible`.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import type { AnalyticsEventType } from '../types/events';
 import type {
   AnalyticsIntegration,
@@ -65,7 +65,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     });
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const visible = props.visible === true;
     const targetId = inferModalTargetFromProps(props);
     const targetName = targetId;
@@ -78,7 +78,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
       if (visible) {
         closeEmittedRef.current = false;
         if (typeof targetId === 'string' && targetId.length > 0) {
-          // Para modal_open, el parentModal debe coincidir con el modal abierto.
+          // Para modal_open, el parent_modal debe coincidir con el modal abierto.
           modalStackPush(targetId);
         }
         if (modalPatchTrackRef.current) {
