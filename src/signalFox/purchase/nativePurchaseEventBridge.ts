@@ -1,4 +1,8 @@
-import { NativeEventEmitter, NativeModules } from 'react-native';
+import {
+  DeviceEventEmitter,
+  NativeEventEmitter,
+  NativeModules,
+} from 'react-native';
 import type { IAnalyticsCore } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
 import { normalizeNativePurchaseEventToAnalyticsEvent } from './normalizeNativePurchaseEvent';
@@ -10,6 +14,19 @@ export const NATIVE_PURCHASE_EVENT_CHANNEL = 'signalfox_purchase_event';
 let activeCore: IAnalyticsCore | null = null;
 let refCount = 0;
 let subscription: { remove: () => void } | null = null;
+let deviceSubscription: { remove: () => void } | null = null;
+
+function debugLog(...args: unknown[]): void {
+  if (__DEV__) {
+    console.log('[SignalfoxPurchaseAnalyticsBridge]', ...args);
+  }
+}
+
+function debugWarn(...args: unknown[]): void {
+  if (__DEV__) {
+    console.warn('[SignalfoxPurchaseAnalyticsBridge]', ...args);
+  }
+}
 
 function toCoreTrackEvent(
   normalized: ReturnType<typeof normalizeNativePurchaseEventToAnalyticsEvent>
@@ -39,29 +56,59 @@ export function startListeningToNativePurchaseEvents(
   refCount += 1;
   if (refCount > 1) return;
 
+  debugLog('startListeningToNativePurchaseEvents', {
+    refCount,
+    platform: core ? 'hasCore' : 'noCore',
+  });
+
   // Suscripción antes de iniciar nativo para evitar race condition.
   const emitterModule = NativeModules.SignalfoxPurchaseEventEmitter;
   if (!emitterModule) {
-    return;
+    debugWarn('NativeModules.SignalfoxPurchaseEventEmitter is missing');
   }
 
-  const emitter = new NativeEventEmitter(emitterModule);
+  if (emitterModule) {
+    const emitter = new NativeEventEmitter(emitterModule);
+    subscription = emitter.addListener(
+      NATIVE_PURCHASE_EVENT_CHANNEL,
+      (event) => {
+        debugLog('NativeEventEmitter received', event);
+        if (!activeCore) return;
+        const payload = event as NativePurchaseEventPayload;
+        const normalized =
+          normalizeNativePurchaseEventToAnalyticsEvent(payload);
+        if (!normalized) {
+          debugWarn('Normalization returned null', payload);
+          return;
+        }
+        const coreEvent = toCoreTrackEvent(normalized);
+        if (!coreEvent) return;
+        activeCore.trackEvent(coreEvent as any);
+      }
+    );
+  }
 
-  subscription = emitter.addListener(
+  // Fallback más simple: DeviceEventEmitter suele recibir eventos de `RCTEventEmitter`/`RCTDeviceEventEmitter`.
+  deviceSubscription = DeviceEventEmitter.addListener(
     NATIVE_PURCHASE_EVENT_CHANNEL,
     (event: unknown) => {
+      debugLog('DeviceEventEmitter received', event);
       if (!activeCore) return;
       const payload = event as NativePurchaseEventPayload;
       const normalized = normalizeNativePurchaseEventToAnalyticsEvent(payload);
+      if (!normalized) {
+        debugWarn('Normalization returned null', payload);
+        return;
+      }
       const coreEvent = toCoreTrackEvent(normalized);
       if (!coreEvent) return;
       activeCore.trackEvent(coreEvent as any);
     }
   );
 
-  void SignalfoxReactNative.startNativePurchaseAnalytics().catch(() => {
-    // En algunos entornos sin autolinking del nativo, degradamos a no-trackear.
-  });
+  void SignalfoxReactNative.startNativePurchaseAnalytics()
+    .then(() => debugLog('startNativePurchaseAnalytics resolved'))
+    .catch((e) => debugWarn('startNativePurchaseAnalytics failed', e));
 }
 
 /**
@@ -72,8 +119,11 @@ export function stopListeningToNativePurchaseEvents(): void {
   refCount -= 1;
   if (refCount > 0) return;
 
+  debugLog('stopListeningToNativePurchaseEvents', { refCount });
   subscription?.remove();
   subscription = null;
+  deviceSubscription?.remove();
+  deviceSubscription = null;
   activeCore = null;
 
   void SignalfoxReactNative.stopNativePurchaseAnalytics().catch(() => {
@@ -124,5 +174,6 @@ export function notifyRestoreCompleted(
  * que típicamente se usa después de iniciar `restore`/sync.
  */
 export async function reconcileNativePurchaseState(): Promise<void> {
+  debugLog('reconcileNativePurchaseState called');
   await SignalfoxReactNative.reconcileNativePurchases();
 }

@@ -41,14 +41,17 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
                                reject:(RCTPromiseRejectBlock)reject
 {
   @try {
+    NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] startNativePurchaseAnalytics called");
     Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
     if (!trackerClass) {
+      NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] SignalfoxPurchaseAnalyticsTracker not found");
       reject(@"START_NATIVE_PURCHASE_ANALYTICS_ERROR", @"SignalfoxPurchaseAnalyticsTracker not found", nil);
       return;
     }
 
     id tracker = ((id (*)(id, SEL))objc_msgSend)(trackerClass, @selector(shared));
     if (!tracker) {
+      NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] SignalfoxPurchaseAnalyticsTracker.shared is nil");
       reject(@"START_NATIVE_PURCHASE_ANALYTICS_ERROR", @"SignalfoxPurchaseAnalyticsTracker.shared is nil", nil);
       return;
     }
@@ -56,6 +59,7 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
     ((void (*)(id, SEL))objc_msgSend)(tracker, @selector(startNativePurchaseAnalytics));
     resolve(nil);
   } @catch (NSException *exception) {
+    NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] startNativePurchaseAnalytics exception=%@", exception.reason);
     reject(@"START_NATIVE_PURCHASE_ANALYTICS_ERROR", exception.reason, nil);
   }
 }
@@ -64,14 +68,17 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
                               reject:(RCTPromiseRejectBlock)reject
 {
   @try {
+    NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] stopNativePurchaseAnalytics called");
     Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
     if (!trackerClass) {
+      NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] SignalfoxPurchaseAnalyticsTracker not found");
       reject(@"STOP_NATIVE_PURCHASE_ANALYTICS_ERROR", @"SignalfoxPurchaseAnalyticsTracker not found", nil);
       return;
     }
 
     id tracker = ((id (*)(id, SEL))objc_msgSend)(trackerClass, @selector(shared));
     if (!tracker) {
+      NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] SignalfoxPurchaseAnalyticsTracker.shared is nil");
       reject(@"STOP_NATIVE_PURCHASE_ANALYTICS_ERROR", @"SignalfoxPurchaseAnalyticsTracker.shared is nil", nil);
       return;
     }
@@ -79,6 +86,7 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
     ((void (*)(id, SEL))objc_msgSend)(tracker, @selector(stopNativePurchaseAnalytics));
     resolve(nil);
   } @catch (NSException *exception) {
+    NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] stopNativePurchaseAnalytics exception=%@", exception.reason);
     reject(@"STOP_NATIVE_PURCHASE_ANALYTICS_ERROR", exception.reason, nil);
   }
 }
@@ -87,14 +95,17 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
                             reject:(RCTPromiseRejectBlock)reject
 {
   @try {
+    NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] reconcileNativePurchases called");
     Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
     if (!trackerClass) {
+      NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] SignalfoxPurchaseAnalyticsTracker not found");
       reject(@"RECONCILE_NATIVE_PURCHASES_ERROR", @"SignalfoxPurchaseAnalyticsTracker not found", nil);
       return;
     }
 
     id tracker = ((id (*)(id, SEL))objc_msgSend)(trackerClass, @selector(shared));
     if (!tracker) {
+      NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] SignalfoxPurchaseAnalyticsTracker.shared is nil");
       reject(@"RECONCILE_NATIVE_PURCHASES_ERROR", @"SignalfoxPurchaseAnalyticsTracker.shared is nil", nil);
       return;
     }
@@ -108,6 +119,7 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
       (id)reject
     );
   } @catch (NSException *exception) {
+    NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] reconcileNativePurchases exception=%@", exception.reason);
     reject(@"RECONCILE_NATIVE_PURCHASES_ERROR", exception.reason, nil);
   }
 }

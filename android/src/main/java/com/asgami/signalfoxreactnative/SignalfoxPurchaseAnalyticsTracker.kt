@@ -1,5 +1,6 @@
 package com.asgami.signalfoxreactnative
 
+import android.util.Log
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingResult
@@ -18,6 +19,10 @@ import java.math.BigInteger
 internal final class SignalfoxPurchaseAnalyticsTracker(
   private val reactContext: ReactApplicationContext
 ) {
+  private companion object {
+    const val TAG = "SignalfoxPurchaseAnalytics"
+  }
+
   private var billingClient: BillingClient? = null
   @Volatile private var isStarted: Boolean = false
 
@@ -31,8 +36,13 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
   private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
     if (!isStarted) return@PurchasesUpdatedListener
 
+    Log.d(TAG, "purchasesUpdatedListener called: responseCode=${billingResult.responseCode} debugMessage=${billingResult.debugMessage}")
     if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
       purchases?.forEach { purchase ->
+        Log.d(
+          TAG,
+          "Purchase callback OK state=${purchase.purchaseState} productId=${purchase.products.firstOrNull()} token=${purchase.purchaseToken}"
+        )
         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
           handlePurchaseCompleted(purchase)
         }
@@ -57,6 +67,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       putString("errorMessage", billingResult.debugMessage)
     }
 
+    Log.d(TAG, "Emitting failure event=$eventName payload=$payload")
     sendEvent(payload)
   }
 
@@ -76,19 +87,23 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     if (isStarted) return
     isStarted = true
 
+    Log.d(TAG, "startNativePurchaseAnalytics()")
     val client = ensureBillingClient()
     client.startConnection(object : BillingClientStateListener {
       override fun onBillingSetupFinished(billingResult: BillingResult) {
+        Log.d(TAG, "BillingClient onBillingSetupFinished code=${billingResult.responseCode} debug=${billingResult.debugMessage}")
         // No emitimos aquí. Esperamos callbacks o reconciliación.
       }
 
       override fun onBillingServiceDisconnected() {
+        Log.d(TAG, "BillingClient onBillingServiceDisconnected")
         // El servicio puede desconectarse. No hacemos reconexión automática para evitar bucles.
       }
     })
   }
 
   fun stopNativePurchaseAnalytics() {
+    Log.d(TAG, "stopNativePurchaseAnalytics()")
     isStarted = false
     billingClient?.endConnection()
     billingClient = null
@@ -96,6 +111,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
 
   fun reconcileNativePurchases(promise: Promise) {
     try {
+      Log.d(TAG, "reconcileNativePurchases() called")
       val client = ensureBillingClient()
 
       val productIds = mutableSetOf<String>()
@@ -105,10 +121,12 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
         if (done[0] < 2) return
 
         if (productIds.isEmpty()) {
+          Log.d(TAG, "reconcileNativePurchases: no restored products")
           promise.resolve(null)
           return
         }
 
+        Log.d(TAG, "reconcileNativePurchases: restoredProductIds=${productIds}")
         val restored = Arguments.createArray().apply {
           productIds.forEach { pushString(it) }
         }
@@ -119,6 +137,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
           putString("store", "google_play")
           putArray("restoredProductIds", restored)
         }
+        Log.d(TAG, "Emitting restore_completed")
         sendEvent(restorePayload)
 
         val reconciledPayload = Arguments.createMap().apply {
@@ -127,6 +146,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
           putString("store", "google_play")
           putArray("restoredProductIds", restored)
         }
+        Log.d(TAG, "Emitting purchase_state_reconciled")
         sendEvent(reconciledPayload)
 
         promise.resolve(null)
@@ -138,6 +158,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
           .build()
 
         client.queryPurchasesAsync(params) { result, purchases ->
+          Log.d(TAG, "queryPurchasesAsync type=$productType response=${result.responseCode} debug=${result.debugMessage} count=${purchases.size}")
           if (result.responseCode == BillingClient.BillingResponseCode.OK) {
             purchases.forEach { p ->
               p.products.firstOrNull()?.let { productIds.add(it) }
@@ -158,6 +179,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
   private fun handlePurchaseCompleted(purchase: Purchase) {
     val productId = purchase.products.firstOrNull() ?: return
 
+    Log.d(TAG, "handlePurchaseCompleted productId=$productId token=${purchase.purchaseToken}")
     queryProductDetails(productId) { details ->
       val productType = if (details?.productType == BillingClient.ProductType.SUBS) {
         "subscription"
@@ -182,12 +204,17 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
         putString("environment", "unknown")
       }
 
+      Log.d(
+        TAG,
+        "Emitting purchase_completed productId=$productId productType=$productType price=${priceInfo.price} currency=${priceInfo.currency} hasTrial=${priceInfo.hasTrial} trialDays=${priceInfo.trialDays}"
+      )
       sendEvent(purchasePayload)
 
       if (productType == "subscription") {
         val subPayload = Arguments.createMap(purchasePayload).apply {
           putString("eventName", "subscription_started")
         }
+        Log.d(TAG, "Emitting subscription_started for $productId")
         sendEvent(subPayload)
       }
 
@@ -196,12 +223,14 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
           putString("eventName", "trial_started")
           putBoolean("hasTrial", true)
         }
+        Log.d(TAG, "Emitting trial_started for $productId trialDays=${priceInfo.trialDays}")
         sendEvent(trialPayload)
       }
     }
   }
 
   private fun sendEvent(payload: com.facebook.react.bridge.WritableMap) {
+    Log.d(TAG, "sendEvent channel=${SignalfoxPurchaseEventEmitterModule.PURCHASE_EVENT_CHANNEL} payload=$payload")
     reactContext
       .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
       .emit(SignalfoxPurchaseEventEmitterModule.PURCHASE_EVENT_CHANNEL, payload)
@@ -217,6 +246,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     }
 
     // Intentamos SUBS primero.
+    Log.d(TAG, "queryProductDetails productId=$productId (first: SUBS)")
     val subsParams = QueryProductDetailsParams.newBuilder()
       .setProductList(
         listOf(
@@ -235,6 +265,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
         return@queryProductDetailsAsync
       }
 
+      Log.d(TAG, "queryProductDetails productId=$productId (fallback: INAPP)")
       val inappParams = QueryProductDetailsParams.newBuilder()
         .setProductList(
           listOf(

@@ -17,7 +17,12 @@ final class SignalfoxPurchaseEventEmitter: RCTEventEmitter {
   @objc
   static func emit(_ body: [String: Any]) {
     // Solo emitimos si hay un emitter activo en el runtime de RN.
-    guard let emitter = sharedInstance else { return }
+    guard let emitter = sharedInstance else {
+      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emit() called but sharedInstance is nil. body=%@", String(describing: body["eventName"]))
+      return
+    }
+    let eventName = body["eventName"] as? String ?? "unknown"
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Emitting %@", eventName)
     emitter.sendEvent(withName: kSignalfoxPurchaseEventChannel, body: body)
   }
 
@@ -46,16 +51,19 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
   func startNativePurchaseAnalytics() {
     guard !isRunning else { return }
     isRunning = true
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] startNativePurchaseAnalytics()")
 
     // SKPaymentQueue cubre cancelaciones y fallos del flujo de compra.
     let observer = PaymentQueueObserver()
     paymentQueueObserver = observer
     SKPaymentQueue.default().add(observer)
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue observer added")
 
     // StoreKit 2 cubre completados (incluyendo restauraciones a nivel de transacción).
     if #available(iOS 15.0, *) {
       transactionUpdatesTask = Task.detached(priority: .background) { [weak self] in
         guard let self else { return }
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] transactionUpdatesTask started")
         await self.listenToTransactionUpdates()
       }
     }
@@ -65,9 +73,11 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
   func stopNativePurchaseAnalytics() {
     guard isRunning else { return }
     isRunning = false
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] stopNativePurchaseAnalytics()")
 
     if let observer = paymentQueueObserver {
       SKPaymentQueue.default().remove(observer)
+      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue observer removed")
     }
     paymentQueueObserver = nil
 
@@ -89,6 +99,7 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
       if #available(iOS 15.0, *) {
         do {
           let restoredProductIds = try await self.collectCurrentEntitlements()
+          NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] reconcileNativePurchases entitlements=%d", restoredProductIds.count)
 
           guard !restoredProductIds.isEmpty else {
             resolve(nil)
@@ -128,6 +139,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     guard #available(iOS 15.0, *) else {
       return (nil, nil, nil, false, nil)
     }
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] storeKitPriceInfo for %@", productId)
     do {
       let products = try await Product.products(for: [productId])
       guard let product = products.first else {
@@ -175,6 +187,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
   private func emitPurchaseStarted(productId: String) {
     if #available(iOS 15.0, *) {
       Task.detached(priority: .background) {
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emit purchase_started for %@", productId)
         let info = await self.storeKitPriceInfo(for: productId)
         SignalfoxPurchaseEventEmitter.emit([
           "eventName": "purchase_started",
@@ -208,8 +221,10 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     let errorCode: String? = skError.map { String(describing: $0.code.rawValue) }
     let errorMessage: String? = error?.localizedDescription
 
+    let eventName = isCancelled ? "purchase_cancelled" : "purchase_failed"
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emit %@ for %@ token=%@", eventName, productId, String(describing: transaction.transactionIdentifier))
     SignalfoxPurchaseEventEmitter.emit([
-      "eventName": isCancelled ? "purchase_cancelled" : "purchase_failed",
+      "eventName": eventName,
       "platform": "ios",
       "store": "app_store",
       "productId": productId,
@@ -224,11 +239,14 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     for transaction in transactions {
       switch transaction.transactionState {
       case .purchasing:
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=purchasing product=%@", transaction.payment.productIdentifier)
         emitPurchaseStarted(productId: transaction.payment.productIdentifier)
       case .failed:
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=failed product=%@", transaction.payment.productIdentifier)
         emitPurchaseFailedOrCancelled(transaction: transaction)
       default:
         // Para completados/restaurados usamos StoreKit2 (Transaction.updates) para reducir duplicados.
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=other=%ld product=%@", transaction.transactionState.rawValue, transaction.payment.productIdentifier)
         break
       }
     }
@@ -245,9 +263,11 @@ private extension SignalfoxPurchaseAnalyticsTracker {
 
       do {
         let transaction = try verification.payloadValue
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Transaction.updates verified productID=%@", transaction.productID)
         await emitForVerifiedTransaction(transaction)
       } catch {
         // Las transacciones no verificadas se omiten para no registrar eventos inexactos.
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Transaction.updates unverified payload skipped")
       }
     }
   }
@@ -315,6 +335,14 @@ private extension SignalfoxPurchaseAnalyticsTracker {
       // Mantener valores por defecto.
     }
 
+    NSLog(
+      "[SignalfoxPurchaseAnalyticsBridge][iOS] emit purchase_completed product=%@ type=%@ hasTrial=%@ trialDays=%@ env=%@",
+      productId,
+      productType,
+      String(hasTrial),
+      trialDays != nil ? String(trialDays!) : "nil",
+      environment
+    )
     SignalfoxPurchaseEventEmitter.emit([
       "eventName": "purchase_completed",
       "platform": platform,
