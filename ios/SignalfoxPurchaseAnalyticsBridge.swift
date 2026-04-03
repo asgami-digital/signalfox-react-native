@@ -5,14 +5,16 @@ import React
 
 private let kSignalfoxPurchaseEventChannel = "signalfox_purchase_event"
 
-/// ISO 4217 desde el `Locale` del producto. `Locale.currency` solo existe en iOS 16+.
+/// ISO 4217 best-effort. StoreKit 2 `Product` no tiene `priceLocale` (eso es `SKProduct` / StoreKit 1).
+/// Desde iOS 16: `priceFormatStyle.locale`. En iOS 15 solo existe `price`/`displayPrice` sin código ISO;
+/// usamos el locale actual del dispositivo como aproximación de la tienda.
 @available(iOS 15.0, *)
 private func storeKitCurrencyCode(for product: Product) -> String? {
-  let locale = product.priceLocale
   if #available(iOS 16.0, *) {
+    let locale = product.priceFormatStyle.locale
     return locale.currency?.identifier ?? locale.currencyCode
   }
-  return locale.currencyCode
+  return Locale.current.currencyCode
 }
 
 @objc(SignalfoxPurchaseEventEmitter)
