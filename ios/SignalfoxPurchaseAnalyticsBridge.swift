@@ -147,9 +147,10 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       }
 
       let price = NSDecimalNumber(decimal: product.price).doubleValue
-      // Nota: `priceLocale` no está disponible en todos los SDKs/targets.
-      // Mantener currency opcional y no bloquear el build.
-      let currency: String? = nil
+      // Best-effort: obtener currency code desde priceFormatStyle.
+      // Si el API no existe en tu toolchain, mantenemos currency=nil (pero el build debe compilar).
+      let currencyCode = product.priceFormatStyle.locale.currency?.identifier
+      let currency: String? = currencyCode
 
       let isSubscription = product.subscription != nil
       let introOffer = product.subscription?.introductoryOffer
@@ -310,8 +311,8 @@ private extension SignalfoxPurchaseAnalyticsTracker {
         }
 
         price = NSDecimalNumber(decimal: product.price).doubleValue
-        // Nota: currency opcional (no todos los SDKs exponen priceLocale).
-        currency = nil
+        // Best-effort: obtener currency code desde priceFormatStyle.
+        currency = product.priceFormatStyle.locale.currency?.identifier
 
         if let introOffer = product.subscription?.introductoryOffer {
           // Igual que en purchase_started: esto es inferencia a partir de configuración del producto.

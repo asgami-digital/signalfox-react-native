@@ -1,8 +1,4 @@
-import {
-  DeviceEventEmitter,
-  NativeEventEmitter,
-  NativeModules,
-} from 'react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 import type { IAnalyticsCore } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
 import { normalizeNativePurchaseEventToAnalyticsEvent } from './normalizeNativePurchaseEvent';
@@ -14,18 +10,52 @@ export const NATIVE_PURCHASE_EVENT_CHANNEL = 'signalfox_purchase_event';
 let activeCore: IAnalyticsCore | null = null;
 let refCount = 0;
 let subscription: { remove: () => void } | null = null;
-let deviceSubscription: { remove: () => void } | null = null;
+const lastEventSeenAtMs = new Map<string, number>();
+const DEDUPE_WINDOW_MS = 3000;
 
 function debugLog(...args: unknown[]): void {
-  if (__DEV__) {
-    console.log('[SignalfoxPurchaseAnalyticsBridge]', ...args);
-  }
+  console.log('[SignalfoxPurchaseAnalyticsBridge]', ...args);
 }
 
 function debugWarn(...args: unknown[]): void {
-  if (__DEV__) {
-    console.warn('[SignalfoxPurchaseAnalyticsBridge]', ...args);
+  console.warn('[SignalfoxPurchaseAnalyticsBridge]', ...args);
+}
+
+function makeDedupeKey(payload: NativePurchaseEventPayload): string {
+  const restored = Array.isArray(payload.restoredProductIds)
+    ? payload.restoredProductIds.join('|')
+    : '';
+  return [
+    payload.eventName,
+    payload.platform,
+    payload.store,
+    payload.productId,
+    payload.transactionId ?? '',
+    payload.originalTransactionId ?? '',
+    payload.environment ?? '',
+    restored,
+  ].join('::');
+}
+
+function shouldDedupe(payload: NativePurchaseEventPayload): boolean {
+  const key = makeDedupeKey(payload);
+  if (
+    !payload.productId &&
+    !payload.transactionId &&
+    !payload.restoredProductIds
+  ) {
+    return false;
   }
+
+  const now = Date.now();
+  const prev = lastEventSeenAtMs.get(key);
+  if (typeof prev === 'number' && now - prev < DEDUPE_WINDOW_MS) {
+    debugWarn('Dedupe: dropping duplicate native purchase event', { key });
+    return true;
+  }
+
+  lastEventSeenAtMs.set(key, now);
+  return false;
 }
 
 function toCoreTrackEvent(
@@ -75,6 +105,9 @@ export function startListeningToNativePurchaseEvents(
         debugLog('NativeEventEmitter received', event);
         if (!activeCore) return;
         const payload = event as NativePurchaseEventPayload;
+
+        if (shouldDedupe(payload)) return;
+
         const normalized =
           normalizeNativePurchaseEventToAnalyticsEvent(payload);
         if (!normalized) {
@@ -87,24 +120,6 @@ export function startListeningToNativePurchaseEvents(
       }
     );
   }
-
-  // Fallback más simple: DeviceEventEmitter suele recibir eventos de `RCTEventEmitter`/`RCTDeviceEventEmitter`.
-  deviceSubscription = DeviceEventEmitter.addListener(
-    NATIVE_PURCHASE_EVENT_CHANNEL,
-    (event: unknown) => {
-      debugLog('DeviceEventEmitter received', event);
-      if (!activeCore) return;
-      const payload = event as NativePurchaseEventPayload;
-      const normalized = normalizeNativePurchaseEventToAnalyticsEvent(payload);
-      if (!normalized) {
-        debugWarn('Normalization returned null', payload);
-        return;
-      }
-      const coreEvent = toCoreTrackEvent(normalized);
-      if (!coreEvent) return;
-      activeCore.trackEvent(coreEvent as any);
-    }
-  );
 
   void SignalfoxReactNative.startNativePurchaseAnalytics()
     .then(() => debugLog('startNativePurchaseAnalytics resolved'))
@@ -122,8 +137,7 @@ export function stopListeningToNativePurchaseEvents(): void {
   debugLog('stopListeningToNativePurchaseEvents', { refCount });
   subscription?.remove();
   subscription = null;
-  deviceSubscription?.remove();
-  deviceSubscription = null;
+  lastEventSeenAtMs.clear();
   activeCore = null;
 
   void SignalfoxReactNative.stopNativePurchaseAnalytics().catch(() => {

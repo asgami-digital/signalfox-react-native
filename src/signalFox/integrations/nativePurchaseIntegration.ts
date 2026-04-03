@@ -17,6 +17,11 @@ export function nativePurchaseIntegration(): AnalyticsIntegration {
     name: 'nativePurchaseAnalytics',
 
     setup(core) {
+      // Logs no condicionados a __DEV__ para depurar problemas de inicialización.
+      // (Si no ves estos logs al hacer una compra/restore, la integración no está montada en tu app.)
+      console.log(
+        '[SignalfoxPurchaseAnalyticsBridge][TS] nativePurchaseIntegration.setup()'
+      );
       startListeningToNativePurchaseEvents(core);
 
       // En algunos apps conviene disparar reconciliación tras conectar.
