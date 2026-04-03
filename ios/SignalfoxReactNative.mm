@@ -1,4 +1,6 @@
 #import "SignalfoxReactNative.h"
+// Necesario para exponer clases Swift a Objective-C.
+#import "SignalfoxReactNative-Swift.h"
 
 static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 

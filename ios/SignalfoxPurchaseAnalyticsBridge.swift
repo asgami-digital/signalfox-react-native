@@ -30,7 +30,7 @@ final class SignalfoxPurchaseEventEmitter: RCTEventEmitter {
   }
 }
 
-@objc
+@objc(SignalfoxPurchaseAnalyticsTracker)
 final class SignalfoxPurchaseAnalyticsTracker: NSObject {
   @objc static let shared = SignalfoxPurchaseAnalyticsTracker()
 
