@@ -75,7 +75,6 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
     transactionUpdatesTask = nil
   }
 
-  @objc
   @objc(reconcileNativePurchases:reject:)
   func reconcileNativePurchases(
     _ resolve: @escaping RCTPromiseResolveBlock,
@@ -136,7 +135,9 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       }
 
       let price = NSDecimalNumber(decimal: product.price).doubleValue
-      let currency = product.priceLocale.currencyCode
+      // Nota: `priceLocale` no está disponible en todos los SDKs/targets.
+      // Mantener currency opcional y no bloquear el build.
+      let currency: String? = nil
 
       let isSubscription = product.subscription != nil
       let introOffer = product.subscription?.introductoryOffer
@@ -147,7 +148,8 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       var hasTrial = introOffer != nil
       var trialDays: Int? = nil
 
-      if let period = introOffer?.period {
+      if let introOffer {
+        let period = introOffer.period
         // Nota: calculamos una aproximación en días.
         // Si el periodo está en meses/años, esto es inferido.
         switch period.unit {
@@ -159,7 +161,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
           trialDays = period.value * 30
         case .year:
           trialDays = period.value * 365
-        default:
+        @unknown default:
           break
         }
       }
@@ -173,7 +175,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
   private func emitPurchaseStarted(productId: String) {
     if #available(iOS 15.0, *) {
       Task.detached(priority: .background) {
-        let info = await storeKitPriceInfo(for: productId)
+        let info = await self.storeKitPriceInfo(for: productId)
         SignalfoxPurchaseEventEmitter.emit([
           "eventName": "purchase_started",
           "platform": "ios",
@@ -258,12 +260,16 @@ private extension SignalfoxPurchaseAnalyticsTracker {
     var platform: String = "ios"
 
     let environment: String = {
-      switch transaction.environment {
-      case .sandbox:
-        return "sandbox"
-      case .production:
-        return "production"
-      @unknown default:
+      if #available(iOS 16.0, *) {
+        switch transaction.environment {
+        case .sandbox:
+          return "sandbox"
+        case .production:
+          return "production"
+        @unknown default:
+          return "unknown"
+        }
+      } else {
         return "unknown"
       }
     }()
@@ -284,24 +290,24 @@ private extension SignalfoxPurchaseAnalyticsTracker {
         }
 
         price = NSDecimalNumber(decimal: product.price).doubleValue
-        currency = product.priceLocale.currencyCode
+        // Nota: currency opcional (no todos los SDKs exponen priceLocale).
+        currency = nil
 
         if let introOffer = product.subscription?.introductoryOffer {
           // Igual que en purchase_started: esto es inferencia a partir de configuración del producto.
           hasTrial = true
-          if let period = introOffer.period {
-            switch period.unit {
-            case .day:
-              trialDays = period.value
-            case .week:
-              trialDays = period.value * 7
-            case .month:
-              trialDays = period.value * 30
-            case .year:
-              trialDays = period.value * 365
-            default:
-              break
-            }
+          let period = introOffer.period
+          switch period.unit {
+          case .day:
+            trialDays = period.value
+          case .week:
+            trialDays = period.value * 7
+          case .month:
+            trialDays = period.value * 30
+          case .year:
+            trialDays = period.value * 365
+          @unknown default:
+            break
           }
         }
       }
