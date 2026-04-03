@@ -259,19 +259,19 @@ private extension SignalfoxPurchaseAnalyticsTracker {
 
     var platform: String = "ios"
 
+    // StoreKit2: `transaction.environment` está disponible desde iOS 16.
+    // Usamos una conversión best-effort sin `switch` para evitar errores de exhaustividad
+    // por variaciones del enum entre toolchains/SDKs.
     let environment: String = {
-      if #available(iOS 16.0, *) {
-        switch transaction.environment {
-        case .sandbox:
-          return "sandbox"
-        case .production:
-          return "production"
-        @unknown default:
-          return "unknown"
-        }
-      } else {
-        return "unknown"
+      guard #available(iOS 16.0, *) else { return "unknown" }
+      let desc = String(describing: transaction.environment).lowercased()
+      if desc.contains("sandbox") {
+        return "sandbox"
       }
+      if desc.contains("production") {
+        return "production"
+      }
+      return "unknown"
     }()
 
     var productType: String = "unknown"
