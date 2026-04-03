@@ -10,7 +10,7 @@ import type {
 export interface IAnalyticsCore {
   /** Vacía la cola y envía eventos pendientes al backend. */
   flush(): Promise<void>;
-  /** Eventos automáticos (lifecycle, navegación, parches RN, RevenueCat). */
+  /** Eventos automáticos (lifecycle, navegación, parches RN, compras). */
   trackEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void;

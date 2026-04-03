@@ -24,6 +24,7 @@ import {
   SignalFoxProvider,
   appStateIntegration,
   reactNavigationIntegration,
+  nativePurchaseIntegration,
   reactNativeModalPatchIntegration,
   reactNativeTouchablePatchIntegration,
 } from '@asgami-digital/signalfox-react-native';
@@ -194,6 +195,7 @@ export default function App() {
     () => [
       reactNavigationIntegration({ navigationRef }),
       appStateIntegration(),
+      nativePurchaseIntegration(),
       reactNativeModalPatchIntegration(),
       reactNativeTouchablePatchIntegration(),
     ],

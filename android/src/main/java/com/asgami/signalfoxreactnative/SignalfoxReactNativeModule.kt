@@ -12,6 +12,10 @@ class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
     appContext.getSharedPreferences("signalfox_react_native", ReactApplicationContext.MODE_PRIVATE)
   }
 
+  private val purchaseTracker by lazy {
+    SignalfoxPurchaseAnalyticsTracker(reactContext)
+  }
+
   override fun multiply(a: Double, b: Double): Double {
     return a * b
   }
@@ -37,6 +41,32 @@ class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
       promise.resolve(anonymousId)
     } catch (error: Exception) {
       promise.reject("GET_ANONYMOUS_ID_ERROR", "Failed to get anonymous id", error)
+    }
+  }
+
+  override fun startNativePurchaseAnalytics(promise: Promise) {
+    try {
+      purchaseTracker.startNativePurchaseAnalytics()
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("START_NATIVE_PURCHASE_ANALYTICS_ERROR", "Failed to start native purchase analytics", e)
+    }
+  }
+
+  override fun stopNativePurchaseAnalytics(promise: Promise) {
+    try {
+      purchaseTracker.stopNativePurchaseAnalytics()
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("STOP_NATIVE_PURCHASE_ANALYTICS_ERROR", "Failed to stop native purchase analytics", e)
+    }
+  }
+
+  override fun reconcileNativePurchases(promise: Promise) {
+    try {
+      purchaseTracker.reconcileNativePurchases(promise)
+    } catch (e: Exception) {
+      promise.reject("RECONCILE_NATIVE_PURCHASES_ERROR", "Failed to reconcile native purchases", e)
     }
   }
 

@@ -7,10 +7,10 @@ export { AnalyticsCore } from './core';
 export type { AnalyticsCoreConfig } from './core';
 export {
   appStateIntegration,
-  revenueCatIntegration,
   reactNativeModalPatchIntegration,
   reactNativeTouchablePatchIntegration,
   reactNavigationIntegration,
+  nativePurchaseIntegration,
   applyModalPatch,
   applyTouchablePatch,
 } from './integrations';
@@ -29,3 +29,21 @@ export {
   getActiveRouteInfo,
   isRoutePresentedAsModal,
 } from './utils/getActiveRouteInfo';
+
+export {
+  reconcileNativePurchaseState,
+  startListeningToNativePurchaseEvents,
+  stopListeningToNativePurchaseEvents,
+  notifyPurchaseStarted,
+  notifyRestoreCompleted,
+} from './purchase/nativePurchaseEventBridge';
+
+export type {
+  PurchaseAnalyticsEventName,
+  NativePurchaseEventPayload,
+  NormalizedPurchaseAnalyticsEvent,
+  PurchaseEnvironment,
+  PurchasePlatform,
+  PurchaseProductType,
+  PurchaseStore,
+} from './purchase/purchaseEventTypes';

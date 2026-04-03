@@ -34,6 +34,40 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   resolve(anonymousId);
 }
 
+// MARK: - Native purchase analytics bridge
+
+- (void)startNativePurchaseAnalytics:(RCTPromiseResolveBlock)resolve
+                               reject:(RCTPromiseRejectBlock)reject
+{
+  @try {
+    [[SignalfoxPurchaseAnalyticsTracker shared] startNativePurchaseAnalytics];
+    resolve(nil);
+  } @catch (NSException *exception) {
+    reject(@"START_NATIVE_PURCHASE_ANALYTICS_ERROR", exception.reason, nil);
+  }
+}
+
+- (void)stopNativePurchaseAnalytics:(RCTPromiseResolveBlock)resolve
+                              reject:(RCTPromiseRejectBlock)reject
+{
+  @try {
+    [[SignalfoxPurchaseAnalyticsTracker shared] stopNativePurchaseAnalytics];
+    resolve(nil);
+  } @catch (NSException *exception) {
+    reject(@"STOP_NATIVE_PURCHASE_ANALYTICS_ERROR", exception.reason, nil);
+  }
+}
+
+- (void)reconcileNativePurchases:(RCTPromiseResolveBlock)resolve
+                            reject:(RCTPromiseRejectBlock)reject
+{
+  @try {
+    [[SignalfoxPurchaseAnalyticsTracker shared] reconcileNativePurchases:resolve reject:reject];
+  } @catch (NSException *exception) {
+    reject(@"RECONCILE_NATIVE_PURCHASES_ERROR", exception.reason, nil);
+  }
+}
+
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {

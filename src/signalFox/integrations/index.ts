@@ -8,4 +8,4 @@ export {
   applyTouchablePatch,
 } from './reactNativeTouchablePatch';
 export { reactNavigationIntegration } from './reactNavigationIntegration';
-export { revenueCatIntegration } from './revenueCatIntegration';
+export { nativePurchaseIntegration } from './nativePurchaseIntegration';

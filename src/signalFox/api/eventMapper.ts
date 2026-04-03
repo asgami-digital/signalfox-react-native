@@ -223,11 +223,8 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
       break;
     }
     default: {
-      // purchase_*, customer_info_*, lifecycle (sin payload rico), etc.
-      if (
-        internalType.startsWith('purchase_') ||
-        internalType.startsWith('customer_info_')
-      ) {
+      // purchase_*, lifecycle (sin payload rico), etc.
+      if (internalType.startsWith('purchase_')) {
         base.screen_name = pickOptionalString(raw.screen_name);
       } else {
         base.screen_name = pickOptionalString(raw.screen_name);

@@ -11,7 +11,6 @@ export type EventFamily =
   | 'component'
   | 'flow'
   | 'purchase'
-  | 'billing'
   | 'custom';
 
 export type CanonicalTriple = {
@@ -96,15 +95,30 @@ const TAXONOMY_BY_TYPE: Record<string, CanonicalTriple> = {
     event_family: 'purchase',
     event_action: 'failed',
   },
-  customer_info_requested: {
-    event_name: 'customer_info_requested',
-    event_family: 'billing',
-    event_action: 'requested',
+  purchase_cancelled: {
+    event_name: 'purchase_cancelled',
+    event_family: 'purchase',
+    event_action: 'cancelled',
   },
-  customer_info_received: {
-    event_name: 'customer_info_received',
-    event_family: 'billing',
-    event_action: 'received',
+  subscription_started: {
+    event_name: 'subscription_started',
+    event_family: 'purchase',
+    event_action: 'started',
+  },
+  trial_started: {
+    event_name: 'trial_started',
+    event_family: 'purchase',
+    event_action: 'started',
+  },
+  restore_completed: {
+    event_name: 'restore_completed',
+    event_family: 'purchase',
+    event_action: 'completed',
+  },
+  purchase_state_reconciled: {
+    event_name: 'purchase_state_reconciled',
+    event_family: 'purchase',
+    event_action: 'reconciled',
   },
 };
 

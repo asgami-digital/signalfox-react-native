@@ -9,10 +9,10 @@ import java.util.HashMap
 
 class SignalfoxReactNativePackage : BaseReactPackage() {
   override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
-    return if (name == SignalfoxReactNativeModule.NAME) {
-      SignalfoxReactNativeModule(reactContext)
-    } else {
-      null
+    return when (name) {
+      SignalfoxReactNativeModule.NAME -> SignalfoxReactNativeModule(reactContext)
+      "SignalfoxPurchaseEventEmitter" -> SignalfoxPurchaseEventEmitterModule(reactContext)
+      else -> null
     }
   }
 

@@ -16,10 +16,13 @@ export type AnalyticsEventType =
   | 'modal_close'
   | 'component_press'
   | 'purchase_started'
+  | 'purchase_cancelled'
   | 'purchase_completed'
   | 'purchase_failed'
-  | 'customer_info_requested'
-  | 'customer_info_received';
+  | 'subscription_started'
+  | 'trial_started'
+  | 'restore_completed'
+  | 'purchase_state_reconciled';
 
 /** Propiedades base presentes en todos los eventos */
 export interface BaseAnalyticsEvent {

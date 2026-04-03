@@ -12,6 +12,7 @@ import React, {
 import { AnalyticsCore } from '../core/AnalyticsCore';
 import { isDevApiKey } from '../core/constants';
 import { appStateIntegration } from '../integrations/appStateIntegration';
+import { nativePurchaseIntegration } from '../integrations/nativePurchaseIntegration';
 import { reactNativeModalPatchIntegration } from '../integrations/reactNativeModalPatch';
 import type { AnalyticsIntegration } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
@@ -88,7 +89,11 @@ export function SignalFoxProvider({
       const list =
         integrations.length > 0
           ? integrations
-          : [appStateIntegration(), reactNativeModalPatchIntegration()];
+          : [
+              appStateIntegration(),
+              nativePurchaseIntegration(),
+              reactNativeModalPatchIntegration(),
+            ];
       cleanupRef.current = list.map((integration) =>
         integration.setup(instance)
       );
