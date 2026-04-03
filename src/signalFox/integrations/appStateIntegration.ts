@@ -87,7 +87,9 @@ export function appStateIntegration(): AnalyticsIntegration {
           }
 
           if (nextState === 'inactive' || nextState === 'background') {
-            void core.flush();
+            core.flush().catch(() => {
+              /* fire-and-forget */
+            });
           }
 
           previousState = nextState;

@@ -4,6 +4,24 @@ import type { BackendEventDto, BackendEventsBulkDto } from './types';
 const BASE_URL = 'https://api-dev.signalfox.io';
 const BULK_EVENTS_PATH = '/analytics/events/bulk';
 
+export class SignalFoxRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'SignalFoxRequestError';
+    this.status = status;
+  }
+}
+
+/**
+ * 4xx que no tiene sentido reintentar sin cambiar API key, URL o el propio SDK.
+ * Se excluyen 408 (timeout ambiguo) y 429 (rate limit), que pueden recuperarse.
+ */
+export function isPermanentHttpSendFailure(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
 export async function sendEvents(params: {
   apiKey: string;
   events: BackendEventDto[];
@@ -27,11 +45,9 @@ export async function sendEvents(params: {
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
-    throw new Error(
-      `SignalFox request failed: ${response.status} ${response.statusText}${
-        errorText ? ` - ${errorText}` : ''
-      }`
-    );
+    const detail = errorText ? ` - ${errorText}` : '';
+    const message = `SignalFox request failed: ${response.status} ${response.statusText}${detail}`;
+    throw new SignalFoxRequestError(response.status, message);
   }
 }
 

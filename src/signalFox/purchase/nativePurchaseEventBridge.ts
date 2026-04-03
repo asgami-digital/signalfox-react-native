@@ -121,7 +121,7 @@ export function startListeningToNativePurchaseEvents(
     );
   }
 
-  void SignalfoxReactNative.startNativePurchaseAnalytics()
+  SignalfoxReactNative.startNativePurchaseAnalytics()
     .then(() => debugLog('startNativePurchaseAnalytics resolved'))
     .catch((e) => debugWarn('startNativePurchaseAnalytics failed', e));
 }
@@ -140,7 +140,7 @@ export function stopListeningToNativePurchaseEvents(): void {
   lastEventSeenAtMs.clear();
   activeCore = null;
 
-  void SignalfoxReactNative.stopNativePurchaseAnalytics().catch(() => {
+  SignalfoxReactNative.stopNativePurchaseAnalytics().catch(() => {
     // ignore
   });
 }

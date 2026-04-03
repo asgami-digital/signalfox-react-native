@@ -5,6 +5,16 @@ import React
 
 private let kSignalfoxPurchaseEventChannel = "signalfox_purchase_event"
 
+/// ISO 4217 desde el `Locale` del producto. `Locale.currency` solo existe en iOS 16+.
+@available(iOS 15.0, *)
+private func storeKitCurrencyCode(for product: Product) -> String? {
+  let locale = product.priceLocale
+  if #available(iOS 16.0, *) {
+    return locale.currency?.identifier ?? locale.currencyCode
+  }
+  return locale.currencyCode
+}
+
 @objc(SignalfoxPurchaseEventEmitter)
 final class SignalfoxPurchaseEventEmitter: RCTEventEmitter {
   private static weak var sharedInstance: SignalfoxPurchaseEventEmitter?
@@ -147,10 +157,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       }
 
       let price = NSDecimalNumber(decimal: product.price).doubleValue
-      // Best-effort: obtener currency code desde priceFormatStyle.
-      // Si el API no existe en tu toolchain, mantenemos currency=nil (pero el build debe compilar).
-      let currencyCode = product.priceFormatStyle.locale.currency?.identifier
-      let currency: String? = currencyCode
+      let currency = storeKitCurrencyCode(for: product)
 
       let isSubscription = product.subscription != nil
       let introOffer = product.subscription?.introductoryOffer
@@ -311,8 +318,7 @@ private extension SignalfoxPurchaseAnalyticsTracker {
         }
 
         price = NSDecimalNumber(decimal: product.price).doubleValue
-        // Best-effort: obtener currency code desde priceFormatStyle.
-        currency = product.priceFormatStyle.locale.currency?.identifier
+        currency = storeKitCurrencyCode(for: product)
 
         if let introOffer = product.subscription?.introductoryOffer {
           // Igual que en purchase_started: esto es inferencia a partir de configuración del producto.

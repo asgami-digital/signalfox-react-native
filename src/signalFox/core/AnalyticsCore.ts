@@ -12,7 +12,11 @@ import type {
   SubviewParams,
 } from '../types/events';
 import type { IAnalyticsCore } from '../types/integration';
-import { sendEvents } from '../api/signalFoxApi';
+import {
+  isPermanentHttpSendFailure,
+  sendEvents,
+  SignalFoxRequestError,
+} from '../api/signalFoxApi';
 import { toBackendEventDto } from '../api/eventMapper';
 import {
   DEFAULT_BATCH_SIZE,
@@ -68,6 +72,8 @@ export class AnalyticsCore implements IAnalyticsCore {
   private readonly queue: QueuedEvent[] = [];
   private isFlushing = false;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
+  /** Tras un 4xx irreversible (p. ej. API key inválida): no más red ni cola. */
+  private sendPermanentlyDisabled = false;
 
   constructor(config: AnalyticsCoreConfig) {
     this.apiKey = config.apiKey;
@@ -187,6 +193,10 @@ export class AnalyticsCore implements IAnalyticsCore {
     event: { type: AnalyticsEventType } & Record<string, unknown>,
     eventTimestamp: number
   ): void {
+    if (this.sendPermanentlyDisabled) {
+      return;
+    }
+
     // Siempre adjuntamos el modal "padre" (último abierto) para enlazar jerarquías de UI.
     // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
     // use el modal anterior (stack después del pop).
@@ -231,14 +241,14 @@ export class AnalyticsCore implements IAnalyticsCore {
     }
 
     if (this.immediateFlush) {
-      void this.flush();
+      this.scheduleFlush();
     } else {
       if (this.queue.length >= this.batchSize) {
-        void this.flush();
+        this.scheduleFlush();
       }
 
       if (event.type === 'app_background') {
-        void this.flush();
+        this.scheduleFlush();
       }
     }
   }
@@ -348,7 +358,15 @@ export class AnalyticsCore implements IAnalyticsCore {
     });
   }
 
+  /** Envío en segundo plano; errores ya se registran en `sendBatch` / `sendEvents`. */
+  private scheduleFlush(): void {
+    this.flush().catch(() => {
+      /* fire-and-forget */
+    });
+  }
+
   async flush(): Promise<void> {
+    if (this.sendPermanentlyDisabled) return;
     if (this.isFlushing) return;
     if (this.queue.length === 0) return;
 
@@ -370,8 +388,12 @@ export class AnalyticsCore implements IAnalyticsCore {
       }
     } finally {
       this.isFlushing = false;
-      if (this.immediateFlush && this.queue.length > 0) {
-        void this.flush();
+      if (
+        this.immediateFlush &&
+        this.queue.length > 0 &&
+        !this.sendPermanentlyDisabled
+      ) {
+        this.scheduleFlush();
       }
     }
   }
@@ -388,6 +410,13 @@ export class AnalyticsCore implements IAnalyticsCore {
       console.log(`[AUTO_ANALYTICS] Sent batch (${events.length})`);
       return true;
     } catch (e) {
+      if (
+        e instanceof SignalFoxRequestError &&
+        isPermanentHttpSendFailure(e.status)
+      ) {
+        this.disableSendingPermanently(e.status, e);
+        return false;
+      }
       console.warn(
         '[AUTO_ANALYTICS] Failed to send batch, keeping events in queue',
         e
@@ -396,10 +425,24 @@ export class AnalyticsCore implements IAnalyticsCore {
     }
   }
 
+  private disableSendingPermanently(status: number, cause: unknown): void {
+    if (this.sendPermanentlyDisabled) {
+      return;
+    }
+    this.sendPermanentlyDisabled = true;
+    const dropped = this.queue.length;
+    this.queue.splice(0, this.queue.length);
+    this.stopFlushTimer();
+    console.warn(
+      `[AUTO_ANALYTICS] Transport disabled after HTTP ${status}; dropped ${dropped} queued event(s). Further analytics will not be sent until a new AnalyticsCore is created.`,
+      cause
+    );
+  }
+
   startFlushTimer(): void {
     if (this.flushTimer) return;
     this.flushTimer = setInterval(() => {
-      void this.flush();
+      this.scheduleFlush();
     }, this.flushIntervalMs);
   }
 
@@ -412,6 +455,6 @@ export class AnalyticsCore implements IAnalyticsCore {
 
   destroy(): void {
     this.stopFlushTimer();
-    void this.flush();
+    this.scheduleFlush();
   }
 }

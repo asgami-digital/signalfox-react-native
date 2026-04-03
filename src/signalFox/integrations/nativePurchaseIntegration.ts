@@ -26,7 +26,9 @@ export function nativePurchaseIntegration(): AnalyticsIntegration {
 
       // En algunos apps conviene disparar reconciliación tras conectar.
       // Degradamos silenciosamente si el nativo no está disponible.
-      void reconcileNativePurchaseState().catch(() => {});
+      reconcileNativePurchaseState().catch(() => {
+        /* fire-and-forget */
+      });
 
       return () => {
         stopListeningToNativePurchaseEvents();
