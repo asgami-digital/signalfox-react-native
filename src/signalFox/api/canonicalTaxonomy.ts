@@ -1,6 +1,9 @@
 /**
  * Taxonomía canónica: event_name, event_family, event_action.
  * Debe coincidir con el contrato del backend.
+ *
+ * Regla: el par (`event_family`, `event_action`) debe ser **único** por tipo de evento
+ * (no reutilizar la misma acción para otro `event_name` dentro de la misma familia).
  */
 
 export type EventFamily =
@@ -103,22 +106,17 @@ const TAXONOMY_BY_TYPE: Record<string, CanonicalTriple> = {
   subscription_started: {
     event_name: 'subscription_started',
     event_family: 'purchase',
-    event_action: 'started',
+    event_action: 'subscription',
   },
   trial_started: {
     event_name: 'trial_started',
     event_family: 'purchase',
-    event_action: 'started',
+    event_action: 'trial',
   },
   restore_completed: {
     event_name: 'restore_completed',
     event_family: 'purchase',
-    event_action: 'completed',
-  },
-  purchase_state_reconciled: {
-    event_name: 'purchase_state_reconciled',
-    event_family: 'purchase',
-    event_action: 'reconciled',
+    event_action: 'restored',
   },
 };
 

@@ -30,7 +30,6 @@ export const PURCHASE_FAMILY_EVENT_TYPES: ReadonlySet<AnalyticsEventType> =
     'subscription_started',
     'trial_started',
     'restore_completed',
-    'purchase_state_reconciled',
   ]);
 
 export function isPurchaseFamilyEventType(

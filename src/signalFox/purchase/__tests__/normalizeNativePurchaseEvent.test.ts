@@ -53,7 +53,6 @@ describe('purchase normalization', () => {
     'subscription_started',
     'trial_started',
     'restore_completed',
-    'purchase_state_reconciled',
   ])('canonical taxonomy maps %s to family purchase', (eventName) => {
     const triple = getCanonicalTriple(eventName);
     expect(triple.event_family).toBe('purchase');

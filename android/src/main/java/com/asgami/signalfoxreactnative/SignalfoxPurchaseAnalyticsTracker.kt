@@ -146,15 +146,6 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
         Log.d(TAG, "Emitting restore_completed")
         sendEvent(restorePayload)
 
-        val reconciledPayload = Arguments.createMap().apply {
-          putString("eventName", "purchase_state_reconciled")
-          putString("platform", "android")
-          putString("store", "google_play")
-          putArray("restoredProductIds", restored)
-        }
-        Log.d(TAG, "Emitting purchase_state_reconciled")
-        sendEvent(reconciledPayload)
-
         promise.resolve(null)
       }
 

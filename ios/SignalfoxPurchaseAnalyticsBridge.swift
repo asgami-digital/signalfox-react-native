@@ -174,13 +174,6 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
             "restoredProductIds": restoredProductIds
           ])
 
-          SignalfoxPurchaseEventEmitter.emit([
-            "eventName": "purchase_state_reconciled",
-            "platform": "ios",
-            "store": "app_store",
-            "restoredProductIds": restoredProductIds
-          ])
-
           resolve(nil)
         } catch {
           reject("RECONCILE_PURCHASES_ERROR", "Failed to reconcile purchases", error)

@@ -21,8 +21,7 @@ export type AnalyticsEventType =
   | 'purchase_failed'
   | 'subscription_started'
   | 'trial_started'
-  | 'restore_completed'
-  | 'purchase_state_reconciled';
+  | 'restore_completed';
 
 /** Propiedades base presentes en todos los eventos */
 export interface BaseAnalyticsEvent {

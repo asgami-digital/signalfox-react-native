@@ -18,7 +18,7 @@ export interface Spec extends TurboModule {
 
   /**
    * Fuerza una reconciliación nativa (ej: re-query de compras activas)
-   * que puede emitir `restore_completed`/`purchase_state_reconciled`.
+   * que puede emitir `restore_completed`.
    */
   reconcileNativePurchases(): Promise<void>;
 }

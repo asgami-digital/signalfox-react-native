@@ -17,8 +17,7 @@ export type PurchaseAnalyticsEventName =
   | 'purchase_completed'
   | 'subscription_started'
   | 'trial_started'
-  | 'restore_completed'
-  | 'purchase_state_reconciled';
+  | 'restore_completed';
 
 export interface NativePurchaseEventPayload {
   eventName: PurchaseAnalyticsEventName;
