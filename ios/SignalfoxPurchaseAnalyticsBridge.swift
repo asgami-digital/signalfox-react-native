@@ -232,34 +232,24 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     return (price, currency, isSubscription ? "subscription" : "inapp", hasTrial, trialDays)
   }
 
-  /// Emisión **inmediata** cuando `SKPaymentQueue` entra en `.purchasing`.
-  /// No esperamos a `Product.products` (puede colgar y retrasar o silenciar el evento).
-  /// Si usas solo StoreKit 2 `Product.purchase()` y no ves este callback, llama desde JS a
-  /// `notifyPurchaseStarted` justo antes de iniciar la compra.
-  private func emitPurchaseStarted(productId: String) {
-    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitPurchaseStarted IMMEDIATE productId=%@", productId)
-    SignalfoxPurchaseEventEmitter.emit([
-      "eventName": "purchase_started",
-      "platform": "ios",
-      "store": "app_store",
-      "productId": productId,
-    ])
-  }
+  /// `purchase_started` / `purchase_cancelled` no se emiten desde StoreKit 1 aquí:
+  /// se cubren vía JS cuando la app usa `react-native-purchases` (ver integración TS).
 
-  private func emitPurchaseFailedOrCancelled(transaction: SKPaymentTransaction) {
+  private func emitPurchaseFailed(transaction: SKPaymentTransaction) {
     let productId = transaction.payment.productIdentifier
     let error = transaction.error
 
     let skError = error as? SKError
-    let isCancelled = skError?.code == .paymentCancelled
-
     let errorCode: String? = skError.map { String(describing: $0.code.rawValue) }
     let errorMessage: String? = error?.localizedDescription
 
-    let eventName = isCancelled ? "purchase_cancelled" : "purchase_failed"
-    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emit %@ for %@ token=%@", eventName, productId, String(describing: transaction.transactionIdentifier))
+    NSLog(
+      "[SignalfoxPurchaseAnalyticsBridge][iOS] emit purchase_failed for %@ token=%@",
+      productId,
+      String(describing: transaction.transactionIdentifier)
+    )
     SignalfoxPurchaseEventEmitter.emit([
-      "eventName": eventName,
+      "eventName": "purchase_failed",
       "platform": "ios",
       "store": "app_store",
       "productId": productId,
@@ -276,10 +266,10 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       switch transaction.transactionState {
       case .purchasing:
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=purchasing product=%@", transaction.payment.productIdentifier)
-        emitPurchaseStarted(productId: transaction.payment.productIdentifier)
+        break
       case .failed:
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=failed product=%@", transaction.payment.productIdentifier)
-        emitPurchaseFailedOrCancelled(transaction: transaction)
+        emitPurchaseFailed(transaction: transaction)
       default:
         // Para completados/restaurados usamos StoreKit2 (Transaction.updates) para reducir duplicados.
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=other=%ld product=%@", transaction.transactionState.rawValue, transaction.payment.productIdentifier)
@@ -351,7 +341,7 @@ private extension SignalfoxPurchaseAnalyticsTracker {
       currency = storeKitCurrencyCode(for: product)
 
       if let introOffer = product.subscription?.introductoryOffer {
-        // Igual que en purchase_started: esto es inferencia a partir de configuración del producto.
+        // Inferencia a partir de configuración del producto (no implica que esta transacción usara el intro).
         hasTrial = true
         let period = introOffer.period
         switch period.unit {

@@ -50,14 +50,8 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       return@PurchasesUpdatedListener
     }
 
-    val isCancelled =
-      billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED
-
-    val eventName = if (isCancelled) {
-      "purchase_cancelled"
-    } else {
-      "purchase_failed"
-    }
+    // purchase_cancelled se emite desde JS vía react-native-purchases (wrappers de compra).
+    val eventName = "purchase_failed"
 
     val productFromPurchase = purchases?.firstOrNull()?.products?.firstOrNull()
 
@@ -72,7 +66,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
 
     Log.d(
       TAG,
-      "Emitting failure event=$eventName productId=$productFromPurchase (si falta, la app debe llamar notifyPurchaseStarted antes del flow para adjuntar sku en JS)"
+      "Emitting failure event=$eventName productId=$productFromPurchase (si falta sku, la app puede usar notifyPurchaseStarted antes del flow o RevenueCat en JS)"
     )
     sendEvent(payload)
   }

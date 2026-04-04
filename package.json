@@ -88,7 +88,13 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-purchases": ">= 6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-purchases": {
+      "optional": true
+    }
   },
   "workspaces": [
     "example"

@@ -4,13 +4,16 @@ import {
   startListeningToNativePurchaseEvents,
   stopListeningToNativePurchaseEvents,
 } from '../purchase/nativePurchaseEventBridge';
+import {
+  startRevenueCatPurchaseAnalyticsIfAvailable,
+  stopRevenueCatPurchaseAnalyticsIfAvailable,
+} from '../purchase/revenueCatPurchaseAnalytics';
 
 /**
  * Conecta eventos nativos de compra (StoreKit / Billing) → TypeScript → core analytics.
  *
- * Nota: `purchase_started` y `restore_completed` pueden no ser 100% observables de forma
- * pasiva dependiendo de la integración de compra del consumidor. Se incluyen hooks TS
- * en `nativePurchaseEventBridge` para cubrir esos huecos.
+ * `purchase_started` y `purchase_cancelled` se obtienen vía `react-native-purchases` si está
+ * instalado (parche de métodos de compra). `restore_completed` puede requerir hooks TS.
  */
 export function nativePurchaseIntegration(): AnalyticsIntegration {
   return {
@@ -23,6 +26,7 @@ export function nativePurchaseIntegration(): AnalyticsIntegration {
         '[SignalfoxPurchaseAnalyticsBridge][TS] nativePurchaseIntegration.setup()'
       );
       startListeningToNativePurchaseEvents(core);
+      startRevenueCatPurchaseAnalyticsIfAvailable();
 
       // En algunos apps conviene disparar reconciliación tras conectar.
       // Degradamos silenciosamente si el nativo no está disponible.
@@ -31,6 +35,7 @@ export function nativePurchaseIntegration(): AnalyticsIntegration {
       });
 
       return () => {
+        stopRevenueCatPurchaseAnalyticsIfAvailable();
         stopListeningToNativePurchaseEvents();
       };
     },
