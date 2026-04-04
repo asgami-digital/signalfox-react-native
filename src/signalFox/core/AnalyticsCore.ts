@@ -23,6 +23,7 @@ import {
   DEFAULT_FLUSH_INTERVAL_MS,
   EVENT_SCREEN_RESOLUTION_DELAY_MS,
   isDevApiKey,
+  isPurchaseFamilyEventType,
   shouldDelayScreenResolution,
 } from './constants';
 import { getActiveModalId } from './modalStack';
@@ -193,6 +194,12 @@ export class AnalyticsCore implements IAnalyticsCore {
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
     if (this.sendPermanentlyDisabled) {
+      if (isPurchaseFamilyEventType(event.type)) {
+        console.warn(
+          '[AUTO_ANALYTICS] purchase event dropped (transport disabled)',
+          { type: event.type }
+        );
+      }
       return;
     }
 
@@ -239,6 +246,14 @@ export class AnalyticsCore implements IAnalyticsCore {
 
     this.queue.push(fullEvent);
 
+    if (isPurchaseFamilyEventType(event.type)) {
+      console.log('[AUTO_ANALYTICS] purchase event queued', {
+        type: event.type,
+        screen_name: resolvedScreenName,
+        timestamp: eventTimestamp,
+      });
+    }
+
     if (this.logOnly) {
       console.log('[AUTO_ANALYTICS]', fullEvent);
     }
@@ -272,10 +287,36 @@ export class AnalyticsCore implements IAnalyticsCore {
       shouldDelayScreenResolution(event.type) &&
       EVENT_SCREEN_RESOLUTION_DELAY_MS > 0
     ) {
+      if (isPurchaseFamilyEventType(event.type)) {
+        console.log(
+          '[AUTO_ANALYTICS] purchase event: waiting screen-resolution delay',
+          {
+            type: event.type,
+            delayMs: EVENT_SCREEN_RESOLUTION_DELAY_MS,
+            currentScreenName: this.currentScreenName,
+          }
+        );
+      }
       setTimeout(() => {
+        if (isPurchaseFamilyEventType(event.type)) {
+          console.log(
+            '[AUTO_ANALYTICS] purchase event: delay elapsed, processing',
+            {
+              type: event.type,
+              currentScreenName: this.currentScreenName,
+            }
+          );
+        }
         this.processEvent(event);
       }, EVENT_SCREEN_RESOLUTION_DELAY_MS);
       return;
+    }
+
+    if (isPurchaseFamilyEventType(event.type)) {
+      console.log('[AUTO_ANALYTICS] purchase event: processing immediately', {
+        type: event.type,
+        currentScreenName: this.currentScreenName,
+      });
     }
 
     this.processEvent(event);

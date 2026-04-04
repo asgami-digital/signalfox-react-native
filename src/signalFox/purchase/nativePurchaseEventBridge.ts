@@ -102,21 +102,41 @@ export function startListeningToNativePurchaseEvents(
     subscription = emitter.addListener(
       NATIVE_PURCHASE_EVENT_CHANNEL,
       (event) => {
-        debugLog('NativeEventEmitter received', event);
-        if (!activeCore) return;
         const payload = event as NativePurchaseEventPayload;
+        debugLog('Native → JS: event received on channel', {
+          eventName: payload?.eventName,
+          productId: payload?.productId,
+          platform: payload?.platform,
+        });
+        if (!activeCore) {
+          debugWarn(
+            'stuck: activeCore is null — trackEvent will not run (listener started before core?)'
+          );
+          return;
+        }
 
-        if (shouldDedupe(payload)) return;
+        if (shouldDedupe(payload)) {
+          debugLog('dedupe: skipped duplicate native purchase payload', {
+            eventName: payload.eventName,
+            productId: payload.productId,
+          });
+          return;
+        }
 
         const normalized =
           normalizeNativePurchaseEventToAnalyticsEvent(payload);
         if (!normalized) {
-          debugWarn('Normalization returned null', payload);
+          debugWarn('stuck: normalization returned null', payload);
           return;
         }
         const coreEvent = toCoreTrackEvent(normalized);
-        if (!coreEvent) return;
+        if (!coreEvent) {
+          debugWarn('stuck: toCoreTrackEvent returned null', normalized);
+          return;
+        }
+        debugLog('JS → core: calling trackEvent', { type: coreEvent.type });
         activeCore.trackEvent(coreEvent as any);
+        debugLog('JS → core: trackEvent returned', { type: coreEvent.type });
       }
     );
   }

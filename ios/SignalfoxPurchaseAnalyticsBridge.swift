@@ -17,6 +17,46 @@ private func storeKitCurrencyCode(for product: Product) -> String? {
   return Locale.current.currencyCode
 }
 
+/// `Product.products` puede colgar indefinidamente en sandbox/simulador; sin tope bloqueábamos el `emit` a JS.
+@available(iOS 15.0, *)
+private func loadFirstProduct(productId: String, timeoutNs: UInt64 = 2_000_000_000) async -> Product? {
+  let timeoutSec = Double(timeoutNs) / 1_000_000_000.0
+  NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] loadFirstProduct START productId=%@ timeout=%.1fs (Product.products can hang in sandbox)", productId, timeoutSec)
+  return await withTaskGroup(of: (product: Product?, isTimeout: Bool).self) { group in
+    group.addTask {
+      do {
+        let list = try await Product.products(for: [productId])
+        if let first = list.first {
+          NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] loadFirstProduct OK productId=%@", productId)
+          return (first, false)
+        }
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] loadFirstProduct empty list productId=%@", productId)
+        return (nil, false)
+      } catch {
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] loadFirstProduct ERROR productId=%@ err=%@", productId, String(describing: error))
+        return (nil, false)
+      }
+    }
+    group.addTask {
+      try? await Task.sleep(nanoseconds: timeoutNs)
+      return (nil, true)
+    }
+    for await partial in group {
+      if let p = partial.product {
+        group.cancelAll()
+        return p
+      }
+      if partial.isTimeout {
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] loadFirstProduct TIMEOUT productId=%@ — emitting without StoreKit metadata", productId)
+        group.cancelAll()
+        return nil
+      }
+    }
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] loadFirstProduct END no product productId=%@", productId)
+    return nil
+  }
+}
+
 @objc(SignalfoxPurchaseEventEmitter)
 final class SignalfoxPurchaseEventEmitter: RCTEventEmitter {
   private static weak var sharedInstance: SignalfoxPurchaseEventEmitter?
@@ -29,12 +69,21 @@ final class SignalfoxPurchaseEventEmitter: RCTEventEmitter {
   @objc
   static func emit(_ body: [String: Any]) {
     // Solo emitimos si hay un emitter activo en el runtime de RN.
+    let eventName = body["eventName"] as? String ?? "unknown"
+    let productId = body["productId"] as? String ?? ""
     guard let emitter = sharedInstance else {
-      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emit() called but sharedInstance is nil. body=%@", String(describing: body["eventName"]))
+      NSLog(
+        "[SignalfoxPurchaseAnalyticsBridge][iOS] STUCK: emit skipped — RCTEventEmitter sharedInstance is nil (RN module not mounted yet?). event=%@ productId=%@",
+        eventName,
+        productId
+      )
       return
     }
-    let eventName = body["eventName"] as? String ?? "unknown"
-    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Emitting %@", eventName)
+    if productId.isEmpty {
+      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Native → RN: sendEvent event=%@", eventName)
+    } else {
+      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Native → RN: sendEvent event=%@ productId=%@", eventName, productId)
+    }
     emitter.sendEvent(withName: kSignalfoxPurchaseEventChannel, body: body)
   }
 
@@ -152,53 +201,50 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       return (nil, nil, nil, false, nil)
     }
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] storeKitPriceInfo for %@", productId)
-    do {
-      let products = try await Product.products(for: [productId])
-      guard let product = products.first else {
-        return (nil, nil, nil, false, nil)
-      }
-
-      let price = NSDecimalNumber(decimal: product.price).doubleValue
-      let currency = storeKitCurrencyCode(for: product)
-
-      let isSubscription = product.subscription != nil
-      let introOffer = product.subscription?.introductoryOffer
-
-      // Inferimos trial/intro si el producto tiene una oferta configurada.
-      // StoreKit no nos da (en este puente) la certeza de que ESA transacción
-      // haya sido efectivamente la que usó el intro offer.
-      var hasTrial = introOffer != nil
-      var trialDays: Int? = nil
-
-      if let introOffer {
-        let period = introOffer.period
-        // Nota: calculamos una aproximación en días.
-        // Si el periodo está en meses/años, esto es inferido.
-        switch period.unit {
-        case .day:
-          trialDays = period.value
-        case .week:
-          trialDays = period.value * 7
-        case .month:
-          trialDays = period.value * 30
-        case .year:
-          trialDays = period.value * 365
-        @unknown default:
-          break
-        }
-      }
-
-      return (price, currency, isSubscription ? "subscription" : "inapp", hasTrial, trialDays)
-    } catch {
+    guard let product = await loadFirstProduct(productId: productId) else {
+      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] storeKitPriceInfo: no Product (timeout/empty) productId=%@", productId)
       return (nil, nil, nil, false, nil)
     }
+
+    let price = NSDecimalNumber(decimal: product.price).doubleValue
+    let currency = storeKitCurrencyCode(for: product)
+
+    let isSubscription = product.subscription != nil
+    let introOffer = product.subscription?.introductoryOffer
+
+    // Inferimos trial/intro si el producto tiene una oferta configurada.
+    // StoreKit no nos da (en este puente) la certeza de que ESA transacción
+    // haya sido efectivamente la que usó el intro offer.
+    var hasTrial = introOffer != nil
+    var trialDays: Int? = nil
+
+    if let introOffer {
+      let period = introOffer.period
+      // Nota: calculamos una aproximación en días.
+      // Si el periodo está en meses/años, esto es inferido.
+      switch period.unit {
+      case .day:
+        trialDays = period.value
+      case .week:
+        trialDays = period.value * 7
+      case .month:
+        trialDays = period.value * 30
+      case .year:
+        trialDays = period.value * 365
+      @unknown default:
+        break
+      }
+    }
+
+    return (price, currency, isSubscription ? "subscription" : "inapp", hasTrial, trialDays)
   }
 
   private func emitPurchaseStarted(productId: String) {
     if #available(iOS 15.0, *) {
       Task.detached(priority: .background) {
-        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emit purchase_started for %@", productId)
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] purchase_started path: awaiting storeKitPriceInfo (loadFirstProduct ≤ ~2s) productId=%@", productId)
         let info = await self.storeKitPriceInfo(for: productId)
+        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] purchase_started path: storeKitPriceInfo done, emitting to RN productId=%@", productId)
         SignalfoxPurchaseEventEmitter.emit([
           "eventName": "purchase_started",
           "platform": "ios",
@@ -246,6 +292,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
   }
 
   func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue updatedTransactions count=%ld", transactions.count)
     for transaction in transactions {
       switch transaction.transactionState {
       case .purchasing:
@@ -268,6 +315,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
 private extension SignalfoxPurchaseAnalyticsTracker {
   @available(iOS 15.0, *)
   func listenToTransactionUpdates() async {
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Transaction.updates: listening (blocks until next transaction)")
     for await verification in Transaction.updates {
       if Task.isCancelled { return }
 
@@ -288,6 +336,8 @@ private extension SignalfoxPurchaseAnalyticsTracker {
     let store: String = "app_store"
 
     var platform: String = "ios"
+
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction BEGIN productId=%@", productId)
 
     // StoreKit2: `transaction.environment` está disponible desde iOS 16.
     // Usamos una conversión best-effort sin `switch` para evitar errores de exhaustividad
@@ -310,38 +360,34 @@ private extension SignalfoxPurchaseAnalyticsTracker {
     var hasTrial: Bool = false
     var trialDays: Int? = nil
 
-    do {
-      let products = try await Product.products(for: [productId])
-      if let product = products.first {
-        if product.subscription != nil {
-          productType = "subscription"
-        } else {
-          productType = "inapp"
-        }
+    if let product = await loadFirstProduct(productId: productId) {
+      NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction: loaded Product for metadata productId=%@", productId)
+      if product.subscription != nil {
+        productType = "subscription"
+      } else {
+        productType = "inapp"
+      }
 
-        price = NSDecimalNumber(decimal: product.price).doubleValue
-        currency = storeKitCurrencyCode(for: product)
+      price = NSDecimalNumber(decimal: product.price).doubleValue
+      currency = storeKitCurrencyCode(for: product)
 
-        if let introOffer = product.subscription?.introductoryOffer {
-          // Igual que en purchase_started: esto es inferencia a partir de configuración del producto.
-          hasTrial = true
-          let period = introOffer.period
-          switch period.unit {
-          case .day:
-            trialDays = period.value
-          case .week:
-            trialDays = period.value * 7
-          case .month:
-            trialDays = period.value * 30
-          case .year:
-            trialDays = period.value * 365
-          @unknown default:
-            break
-          }
+      if let introOffer = product.subscription?.introductoryOffer {
+        // Igual que en purchase_started: esto es inferencia a partir de configuración del producto.
+        hasTrial = true
+        let period = introOffer.period
+        switch period.unit {
+        case .day:
+          trialDays = period.value
+        case .week:
+          trialDays = period.value * 7
+        case .month:
+          trialDays = period.value * 30
+        case .year:
+          trialDays = period.value * 365
+        @unknown default:
+          break
         }
       }
-    } catch {
-      // Mantener valores por defecto.
     }
 
     NSLog(
@@ -403,7 +449,9 @@ private extension SignalfoxPurchaseAnalyticsTracker {
     // IMPORTANTE: en StoreKit2 se recomienda terminar la transacción para evitar
     // re-emisiones en `Transaction.updates`. Esto no consume la compra, solo marca
     // que el "consumer" (este puente) ya la procesó para analytics.
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction: calling transaction.finish() productId=%@", productId)
     await transaction.finish()
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction END productId=%@", productId)
   }
 
   @available(iOS 15.0, *)

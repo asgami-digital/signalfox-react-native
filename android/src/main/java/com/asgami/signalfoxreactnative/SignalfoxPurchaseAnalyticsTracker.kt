@@ -177,9 +177,12 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
   }
 
   private fun handlePurchaseCompleted(purchase: Purchase) {
-    val productId = purchase.products.firstOrNull() ?: return
+    val productId = purchase.products.firstOrNull() ?: run {
+      Log.w(TAG, "STUCK: handlePurchaseCompleted — purchase has no product id in products[]")
+      return
+    }
 
-    Log.d(TAG, "handlePurchaseCompleted productId=$productId token=${purchase.purchaseToken}")
+    Log.d(TAG, "handlePurchaseCompleted productId=$productId token=${purchase.purchaseToken} (next: queryProductDetails)")
     queryProductDetails(productId) { details ->
       val productType = if (details?.productType == BillingClient.ProductType.SUBS) {
         "subscription"
@@ -230,7 +233,12 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
   }
 
   private fun sendEvent(payload: com.facebook.react.bridge.WritableMap) {
-    Log.d(TAG, "sendEvent channel=${SignalfoxPurchaseEventEmitterModule.PURCHASE_EVENT_CHANNEL} payload=$payload")
+    val name = payload.getString("eventName") ?: "unknown"
+    val pid = payload.getString("productId") ?: ""
+    Log.d(
+      TAG,
+      "Native → JS: DeviceEventEmitter.emit channel=${SignalfoxPurchaseEventEmitterModule.PURCHASE_EVENT_CHANNEL} eventName=$name productId=$pid"
+    )
     reactContext
       .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
       .emit(SignalfoxPurchaseEventEmitterModule.PURCHASE_EVENT_CHANNEL, payload)
@@ -241,12 +249,13 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     cb: (ProductDetails?) -> Unit
   ) {
     val client = billingClient ?: run {
+      Log.w(TAG, "STUCK: queryProductDetails — billingClient is null (startNativePurchaseAnalytics not run or stopped?)")
       cb(null)
       return
     }
 
     // Intentamos SUBS primero.
-    Log.d(TAG, "queryProductDetails productId=$productId (first: SUBS)")
+    Log.d(TAG, "queryProductDetails START productId=$productId (first: SUBS)")
     val subsParams = QueryProductDetailsParams.newBuilder()
       .setProductList(
         listOf(
@@ -261,11 +270,12 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     client.queryProductDetailsAsync(subsParams) { _, list ->
       val subs = list.firstOrNull()
       if (subs != null) {
+        Log.d(TAG, "queryProductDetails got SUBS productId=$productId")
         cb(subs)
         return@queryProductDetailsAsync
       }
 
-      Log.d(TAG, "queryProductDetails productId=$productId (fallback: INAPP)")
+      Log.d(TAG, "queryProductDetails no SUBS, trying INAPP productId=$productId")
       val inappParams = QueryProductDetailsParams.newBuilder()
         .setProductList(
           listOf(
@@ -278,7 +288,13 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
         .build()
 
       client.queryProductDetailsAsync(inappParams) { _, inappList ->
-        cb(inappList.firstOrNull())
+        val d = inappList.firstOrNull()
+        if (d == null) {
+          Log.w(TAG, "queryProductDetails STUCK/empty: no ProductDetails for productId=$productId (check Play Console / sku)")
+        } else {
+          Log.d(TAG, "queryProductDetails got INAPP productId=$productId")
+        }
+        cb(d)
       }
     }
   }
