@@ -14,7 +14,7 @@ export const DEFAULT_FLUSH_INTERVAL_MS = 30_000;
  * Delay corto para dejar que `screen_view` actualice la pantalla activa
  * antes de adjudicar `screen_name` al resto (incluida la familia de compras).
  */
-export const EVENT_SCREEN_RESOLUTION_DELAY_MS = 100;
+export const EVENT_SCREEN_RESOLUTION_DELAY_MS = 0;
 
 /** Único tipo que procesa sin esperar: fija `currentScreenName` antes que los demás. */
 const NO_SCREEN_RESOLUTION_DELAY_TYPES: ReadonlySet<AnalyticsEventType> =
