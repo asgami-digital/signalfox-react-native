@@ -19,6 +19,166 @@ import {
 // Interval para fallback mínimo si no se puede adjuntar un listener del navigator.
 const POLL_INTERVAL_MS = 350;
 
+const DISPATCH_INTENT_TYPES = new Set<string>([
+  'NAVIGATE',
+  'NAVIGATE_DEPRECATED',
+  'RESET',
+  'GO_BACK',
+  'PUSH',
+  'REPLACE',
+  'POP',
+  'POP_TO_TOP',
+  'POP_TO',
+  'JUMP_TO',
+]);
+
+const NAV_METHODS_TO_WRAP = [
+  'navigate',
+  'navigateDeprecated',
+  'reset',
+  'resetRoot',
+  'goBack',
+  'push',
+  'replace',
+  'pop',
+  'popToTop',
+  'popTo',
+] as const;
+
+type NavPatchTarget = Record<string, unknown>;
+
+type NavPatchRegistryEntry = {
+  refCount: number;
+  restore: () => void;
+};
+
+const navigationRefPatchRegistry = new WeakMap<object, NavPatchRegistryEntry>();
+
+function shouldMarkDispatchAction(action: unknown): boolean {
+  if (typeof action === 'function') {
+    return true;
+  }
+  if (!action || typeof action !== 'object') {
+    return false;
+  }
+  const t = (action as { type?: unknown }).type;
+  return typeof t === 'string' && DISPATCH_INTENT_TYPES.has(t);
+}
+
+/**
+ * Firma estable de la rama activa raíz → hoja (tipos de navigator, índices, nombres y keys de ruta).
+ * Detecta cambios en stacks/tabs anidados que no alteran el índice ni los nombres solo en el nivel raíz.
+ */
+function buildActiveRouteBranchKey(state: NavStateLike | undefined): string {
+  type RouteBranch = NavStateLike['routes'][number] & { key?: string };
+
+  const segments: Array<{
+    type?: string;
+    index: number;
+    name: string;
+    key?: string;
+  }> = [];
+
+  let curr: NavStateLike | undefined = state;
+  while (
+    curr?.routes?.length &&
+    curr.index >= 0 &&
+    curr.index < curr.routes.length
+  ) {
+    const route = curr.routes[curr.index] as RouteBranch;
+    if (!route?.name) {
+      break;
+    }
+    const routeKey =
+      typeof route.key === 'string' && route.key.length > 0
+        ? route.key
+        : undefined;
+    segments.push({
+      type: typeof curr.type === 'string' ? curr.type : undefined,
+      index: curr.index,
+      name: route.name,
+      key: routeKey,
+    });
+    curr = route.state;
+  }
+
+  return JSON.stringify(segments);
+}
+
+/**
+ * Envuelve métodos del ref / objeto de navegación para registrar el instante de la intención.
+ * Idempotente por objeto: varias inicializaciones incrementan refCount; cada release lo decrementa.
+ */
+function acquireNavigationRefIntentPatch(
+  target: unknown,
+  onNavigationIntent: () => void
+): () => void {
+  if (!target || typeof target !== 'object') {
+    return () => {};
+  }
+
+  const key = target as object;
+  const existing = navigationRefPatchRegistry.get(key);
+  if (existing) {
+    existing.refCount += 1;
+    return () => {
+      existing.refCount -= 1;
+      if (existing.refCount <= 0) {
+        existing.restore();
+        navigationRefPatchRegistry.delete(key);
+      }
+    };
+  }
+
+  const nav = target as NavPatchTarget;
+  const originals = new Map<string, (...args: unknown[]) => unknown>();
+
+  for (const name of NAV_METHODS_TO_WRAP) {
+    const value = nav[name];
+    if (typeof value !== 'function') {
+      continue;
+    }
+    const original = value as (...args: unknown[]) => unknown;
+    originals.set(name, original);
+    nav[name] = (...args: unknown[]) => {
+      onNavigationIntent();
+      return original.apply(nav, args);
+    };
+  }
+
+  const dispatchVal = nav.dispatch;
+  if (typeof dispatchVal === 'function' && !originals.has('dispatch')) {
+    const originalDispatch = dispatchVal as (action: unknown) => unknown;
+    originals.set('dispatch', originalDispatch);
+    nav.dispatch = (action: unknown) => {
+      if (shouldMarkDispatchAction(action)) {
+        onNavigationIntent();
+      }
+      return originalDispatch.call(nav, action);
+    };
+  }
+
+  const restore = () => {
+    for (const [name, fn] of originals) {
+      nav[name] = fn;
+    }
+  };
+
+  navigationRefPatchRegistry.set(key, { refCount: 1, restore });
+
+  return () => {
+    const entry = navigationRefPatchRegistry.get(key);
+    if (!entry) {
+      return;
+    }
+    entry.refCount -= 1;
+    if (entry.refCount <= 0) {
+      entry.restore();
+      navigationRefPatchRegistry.delete(key);
+    }
+  };
+}
+
 interface RouteChainEntry {
   name: string;
   presentation?: string;
@@ -54,16 +214,27 @@ function emitScreenView(
   core: IAnalyticsCore,
   screenName: string,
   previousScreen: string | undefined,
-  navigatorContext: NavigatorContextPayload
+  navigatorContext: NavigatorContextPayload,
+  eventTimestampMs?: number
 ): void {
-  core.trackEvent({
+  const event: Record<string, unknown> = {
     type: 'screen_view',
     payload: {
       screen_name: screenName,
       previous_screen_name: previousScreen ?? null,
       navigator_context: navigatorContext,
     },
-  });
+  };
+
+  if (
+    typeof eventTimestampMs === 'number' &&
+    Number.isFinite(eventTimestampMs) &&
+    eventTimestampMs > 0
+  ) {
+    event.timestamp = eventTimestampMs;
+  }
+
+  core.trackEvent(event as { type: 'screen_view' } & Record<string, unknown>);
 }
 
 /**
@@ -213,7 +384,35 @@ export function reactNavigationIntegration(
 
     setup(core) {
       let previousScreenName: string | undefined;
-      let lastStateKey: string | null = null;
+      let lastActiveBranchKey: string | null = null;
+      let pendingNavigationTimestamp: number | null = null;
+
+      const markNavigationIntent = () => {
+        pendingNavigationTimestamp = Date.now();
+      };
+
+      const releasePatches: Array<() => void> = [];
+      releasePatches.push(
+        acquireNavigationRefIntentPatch(
+          navigationRef as unknown,
+          markNavigationIntent
+        )
+      );
+      releasePatches.push(
+        acquireNavigationRefIntentPatch(
+          navigationRef.current as unknown,
+          markNavigationIntent
+        )
+      );
+
+      const patchCurrentWhenReady = () => {
+        releasePatches.push(
+          acquireNavigationRefIntentPatch(
+            navigationRef.current as unknown,
+            markNavigationIntent
+          )
+        );
+      };
 
       const handleStateChange = () => {
         const ref = navigationRef.current;
@@ -221,30 +420,47 @@ export function reactNavigationIntegration(
         const state = ref.getRootState() as NavStateLike | undefined;
         if (!state?.routes?.length) return;
 
-        const stateKey = JSON.stringify({
-          index: state.index,
-          routeNames: state.routes.map((r) => r.name),
-        });
-        if (stateKey === lastStateKey) return;
-        lastStateKey = stateKey;
+        const activeBranchKey = buildActiveRouteBranchKey(state);
+        if (activeBranchKey === lastActiveBranchKey) {
+          // Misma rama activa completa (p. ej. solo params): no hay transición de pantalla nueva; evita pending colgado.
+          pendingNavigationTimestamp = null;
+          return;
+        }
+        lastActiveBranchKey = activeBranchKey;
 
         const activeName = getActiveRouteName(state);
-        if (activeName == null) return;
+        if (activeName == null) {
+          pendingNavigationTimestamp = null;
+          return;
+        }
 
         const currentInfo = getActiveRouteInfo(state, getRoutePresentation);
-        if (!currentInfo) return;
+        if (!currentInfo) {
+          pendingNavigationTimestamp = null;
+          return;
+        }
         const navigatorContext = buildNavigatorContext(
           state,
           getRoutePresentation,
           currentInfo
         );
 
+        const intentTs = pendingNavigationTimestamp;
+        pendingNavigationTimestamp = null;
+
         if (activeName !== previousScreenName) {
+          const tsForEvent =
+            typeof intentTs === 'number' &&
+            Number.isFinite(intentTs) &&
+            intentTs > 0
+              ? intentTs
+              : undefined;
           emitScreenView(
             core,
             activeName,
             previousScreenName,
-            navigatorContext
+            navigatorContext,
+            tsForEvent
           );
         }
 
@@ -288,10 +504,10 @@ export function reactNavigationIntegration(
 
       // Algunas implementaciones emiten 'ready' (si existe, disparamos al primer estado válido).
       if (typeof navigationRef.addListener === 'function') {
-        const unsubReady = navigationRef.addListener(
-          'ready',
-          handleStateChange
-        );
+        const unsubReady = navigationRef.addListener('ready', () => {
+          patchCurrentWhenReady();
+          handleStateChange();
+        });
         if (typeof unsubReady === 'function') unsubscribers.push(unsubReady);
       }
 
@@ -304,6 +520,7 @@ export function reactNavigationIntegration(
       // Intento inicial si el container ya está listo.
       try {
         if (navigationRef.current?.isReady?.()) {
+          patchCurrentWhenReady();
           handleStateChange();
         }
       } catch {
@@ -313,6 +530,7 @@ export function reactNavigationIntegration(
       return () => {
         for (const u of unsubscribers) u();
         if (interval) clearInterval(interval);
+        for (const release of releasePatches) release();
       };
     },
   };

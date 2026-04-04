@@ -5,6 +5,9 @@ import React
 
 private let kSignalfoxPurchaseEventChannel = "signalfox_purchase_event"
 
+/// Umbral entre `signedDate` y `purchaseDate` para detectar replay de historial (restore/sync) en StoreKit 2.
+private let kSignalfoxRestoreReplaySignedVsPurchaseSkewSeconds: TimeInterval = 180
+
 /// ISO 4217 best-effort. StoreKit 2 `Product` no tiene `priceLocale` (eso es `SKProduct` / StoreKit 1).
 /// Desde iOS 16: `priceFormatStyle.locale`. En iOS 15 solo existe `price`/`displayPrice` sin código ISO;
 /// usamos el locale actual del dispositivo como aproximación de la tienda.
@@ -270,8 +273,15 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
       case .failed:
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=failed product=%@", transaction.payment.productIdentifier)
         emitPurchaseFailed(transaction: transaction)
+      case .restored:
+        // Replay del historial al restaurar: no analytics aquí (un solo `restore_completed` vía reconcile).
+        NSLog(
+          "[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=restored ignored product=%@",
+          transaction.payment.productIdentifier
+        )
+        break
       default:
-        // Para completados/restaurados usamos StoreKit2 (Transaction.updates) para reducir duplicados.
+        // Para completados usamos StoreKit2 (Transaction.updates) para reducir duplicados.
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=other=%ld product=%@", transaction.transactionState.rawValue, transaction.payment.productIdentifier)
         break
       }
@@ -282,6 +292,33 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
 // MARK: - StoreKit 2 (purchase_completed + subscription/trial)
 
 private extension SignalfoxPurchaseAnalyticsTracker {
+  /// StoreKit 2 no distingue "restaurado" en `Transaction.Reason` (solo purchase/renewal). Tras `restore`/`sync`,
+  /// el historial suele reaparecer como `.purchase` con `purchaseDate` antigua y `signedDate` reciente.
+  /// Las renovaciones reales llevan `.renewal` y no se filtran.
+  @available(iOS 15.0, *)
+  func shouldSuppressPurchaseAnalyticsForRestoreReplay(_ transaction: Transaction) -> Bool {
+    if #available(iOS 17.0, *) {
+      if transaction.reason == .renewal {
+        return false
+      }
+      let raw = transaction.reason.rawValue.uppercased()
+      if raw.contains("RESTORE") {
+        return true
+      }
+    } else {
+      let raw = transaction.reasonStringRepresentation.uppercased()
+      if raw == "RENEWAL" {
+        return false
+      }
+      if raw.contains("RESTORE") {
+        return true
+      }
+    }
+
+    let skew = transaction.signedDate.timeIntervalSince(transaction.purchaseDate)
+    return skew > kSignalfoxRestoreReplaySignedVsPurchaseSkewSeconds
+  }
+
   @available(iOS 15.0, *)
   func listenToTransactionUpdates() async {
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Transaction.updates: listening (blocks until next transaction)")
@@ -307,6 +344,15 @@ private extension SignalfoxPurchaseAnalyticsTracker {
     var platform: String = "ios"
 
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction BEGIN productId=%@", productId)
+
+    if shouldSuppressPurchaseAnalyticsForRestoreReplay(transaction) {
+      NSLog(
+        "[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction: suppressed as restore/sync replay productId=%@ (finish only)",
+        productId
+      )
+      await transaction.finish()
+      return
+    }
 
     // StoreKit2: `transaction.environment` está disponible desde iOS 16.
     // Usamos una conversión best-effort sin `switch` para evitar errores de exhaustividad

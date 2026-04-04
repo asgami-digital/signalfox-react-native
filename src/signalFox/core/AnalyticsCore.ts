@@ -203,9 +203,16 @@ export class AnalyticsCore implements IAnalyticsCore {
       return;
     }
 
-    // Timestamp en el momento en que el evento se materializa en la cola (tras el delay
-    // de resolución de pantalla si aplica), no en la llamada inicial a trackEvent.
-    const eventTimestamp = Date.now();
+    // Por defecto: momento en que el evento se materializa en la cola (tras el delay
+    // de resolución de pantalla si aplica). Las integraciones pueden fijar `timestamp`
+    // (ms desde epoch) en el objeto pasado a trackEvent para anclar el instante real.
+    const explicitTs = (event as { timestamp?: unknown }).timestamp;
+    const eventTimestamp =
+      typeof explicitTs === 'number' &&
+      Number.isFinite(explicitTs) &&
+      explicitTs > 0
+        ? explicitTs
+        : Date.now();
 
     // Siempre adjuntamos el modal "padre" (último abierto) para enlazar jerarquías de UI.
     // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
