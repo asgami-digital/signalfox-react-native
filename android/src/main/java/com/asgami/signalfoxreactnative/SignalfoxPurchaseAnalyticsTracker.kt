@@ -59,15 +59,21 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       "purchase_failed"
     }
 
+    val productFromPurchase = purchases?.firstOrNull()?.products?.firstOrNull()
+
     val payload = Arguments.createMap().apply {
       putString("eventName", eventName)
       putString("platform", "android")
       putString("store", "google_play")
       putString("errorCode", billingResult.responseCode.toString())
       putString("errorMessage", billingResult.debugMessage)
+      productFromPurchase?.let { putString("productId", it) }
     }
 
-    Log.d(TAG, "Emitting failure event=$eventName payload=$payload")
+    Log.d(
+      TAG,
+      "Emitting failure event=$eventName productId=$productFromPurchase (si falta, la app debe llamar notifyPurchaseStarted antes del flow para adjuntar sku en JS)"
+    )
     sendEvent(payload)
   }
 
@@ -214,20 +220,19 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       sendEvent(purchasePayload)
 
       if (productType == "subscription") {
-        val subPayload = Arguments.createMap(purchasePayload).apply {
+        val subPayload = Arguments.createMap().apply {
           putString("eventName", "subscription_started")
+          putString("platform", "android")
+          putString("store", "google_play")
+          putString("productId", productId)
+          putString("productType", productType)
+          priceInfo.price?.let { putDouble("price", it) }
+          priceInfo.currency?.let { putString("currency", it) }
+          putString("transactionId", purchase.purchaseToken)
+          putString("environment", "unknown")
         }
         Log.d(TAG, "Emitting subscription_started for $productId")
         sendEvent(subPayload)
-      }
-
-      if (priceInfo.hasTrial == true) {
-        val trialPayload = Arguments.createMap(purchasePayload).apply {
-          putString("eventName", "trial_started")
-          putBoolean("hasTrial", true)
-        }
-        Log.d(TAG, "Emitting trial_started for $productId trialDays=${priceInfo.trialDays}")
-        sendEvent(trialPayload)
       }
     }
   }

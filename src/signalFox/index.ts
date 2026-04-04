@@ -35,6 +35,8 @@ export {
   startListeningToNativePurchaseEvents,
   stopListeningToNativePurchaseEvents,
   notifyPurchaseStarted,
+  notifyPurchaseCancelled,
+  notifyPurchaseFailed,
   notifyRestoreCompleted,
 } from './purchase/nativePurchaseEventBridge';
 

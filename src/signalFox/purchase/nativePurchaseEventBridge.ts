@@ -1,8 +1,11 @@
-import { NativeEventEmitter, NativeModules } from 'react-native';
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import type { IAnalyticsCore } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
 import { normalizeNativePurchaseEventToAnalyticsEvent } from './normalizeNativePurchaseEvent';
-import type { NativePurchaseEventPayload } from './purchaseEventTypes';
+import type {
+  NativePurchaseEventPayload,
+  PurchaseStore,
+} from './purchaseEventTypes';
 import SignalfoxReactNative from '../../NativeSignalfoxReactNative';
 
 export const NATIVE_PURCHASE_EVENT_CHANNEL = 'signalfox_purchase_event';
@@ -12,6 +15,44 @@ let refCount = 0;
 let subscription: { remove: () => void } | null = null;
 const lastEventSeenAtMs = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 3000;
+
+/** Último sku notificado con `notifyPurchaseStarted` (p. ej. Android cancel sin productId). */
+let pendingPurchaseProductId: string | null = null;
+
+function defaultStoreForPlatform(): PurchaseStore {
+  return Platform.OS === 'ios' ? 'app_store' : 'google_play';
+}
+
+function setPendingPurchaseProductId(productId: unknown): void {
+  if (typeof productId === 'string' && productId.trim().length > 0) {
+    pendingPurchaseProductId = productId.trim();
+    debugLog('pending purchase productId set', {
+      productId: pendingPurchaseProductId,
+    });
+  }
+}
+
+function clearPendingPurchaseProductId(reason: string): void {
+  if (pendingPurchaseProductId != null) {
+    debugLog('pending purchase productId cleared', { reason });
+  }
+  pendingPurchaseProductId = null;
+}
+
+function enrichPayloadWithPendingProductId(
+  payload: NativePurchaseEventPayload
+): void {
+  const needsId =
+    (payload.eventName === 'purchase_cancelled' ||
+      payload.eventName === 'purchase_failed') &&
+    !payload.productId;
+  if (needsId && pendingPurchaseProductId) {
+    (payload as { productId?: string }).productId = pendingPurchaseProductId;
+    debugLog('JS: attached pending productId to native cancel/fail payload', {
+      productId: pendingPurchaseProductId,
+    });
+  }
+}
 
 function debugLog(...args: unknown[]): void {
   console.log('[SignalfoxPurchaseAnalyticsBridge]', ...args);
@@ -115,6 +156,8 @@ export function startListeningToNativePurchaseEvents(
           return;
         }
 
+        enrichPayloadWithPendingProductId(payload);
+
         if (shouldDedupe(payload)) {
           debugLog('dedupe: skipped duplicate native purchase payload', {
             eventName: payload.eventName,
@@ -137,6 +180,15 @@ export function startListeningToNativePurchaseEvents(
         debugLog('JS → core: calling trackEvent', { type: coreEvent.type });
         activeCore.trackEvent(coreEvent as any);
         debugLog('JS → core: trackEvent returned', { type: coreEvent.type });
+
+        const done = payload.eventName;
+        if (
+          done === 'purchase_completed' ||
+          done === 'purchase_cancelled' ||
+          done === 'purchase_failed'
+        ) {
+          clearPendingPurchaseProductId(done);
+        }
       }
     );
   }
@@ -159,6 +211,7 @@ export function stopListeningToNativePurchaseEvents(): void {
   subscription = null;
   lastEventSeenAtMs.clear();
   activeCore = null;
+  pendingPurchaseProductId = null;
 
   SignalfoxReactNative.stopNativePurchaseAnalytics().catch(() => {
     // ignore
@@ -166,23 +219,66 @@ export function stopListeningToNativePurchaseEvents(): void {
 }
 
 /**
- * Hook opcional: permite emitir `purchase_started` cuando no es observable pasivamente
- * desde el nativo (por ejemplo, por la forma en que la app lanza su flow de compra).
+ * Llama justo **antes** de iniciar la compra si usas StoreKit 2 `Product.purchase()` (no siempre
+ * hay `SKPaymentQueue` `.purchasing`) o Billing `launchBillingFlow` (para poder adjuntar `productId`
+ * en cancelaciones que llegan sin sku).
  *
- * Nota: el backend seguirá agrupando por `family = "purchase"`.
+ * Guarda `productId` en memoria para `purchase_cancelled` / `purchase_failed` huérfanos.
  */
 export function notifyPurchaseStarted(
   payload: Omit<NativePurchaseEventPayload, 'eventName'>
 ): void {
+  setPendingPurchaseProductId((payload as { productId?: string }).productId);
+
   if (!activeCore) return;
 
   const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
     ...(payload as any),
     eventName: 'purchase_started',
+    platform:
+      (payload as any).platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: (payload as any).store ?? defaultStoreForPlatform(),
   });
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
   activeCore.trackEvent(coreEvent as any);
+}
+
+/**
+ * Cuando el resultado de compra solo llega a JS (p. ej. cancelación de StoreKit 2 en el `switch`).
+ */
+export function notifyPurchaseCancelled(
+  payload?: Omit<NativePurchaseEventPayload, 'eventName'>
+): void {
+  if (!activeCore) return;
+
+  const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
+    ...(payload as any),
+    eventName: 'purchase_cancelled',
+    platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: payload?.store ?? defaultStoreForPlatform(),
+  });
+  const coreEvent = toCoreTrackEvent(normalized);
+  if (!coreEvent) return;
+  activeCore.trackEvent(coreEvent as any);
+  clearPendingPurchaseProductId('notifyPurchaseCancelled');
+}
+
+export function notifyPurchaseFailed(
+  payload?: Omit<NativePurchaseEventPayload, 'eventName'>
+): void {
+  if (!activeCore) return;
+
+  const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
+    ...(payload as any),
+    eventName: 'purchase_failed',
+    platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: payload?.store ?? defaultStoreForPlatform(),
+  });
+  const coreEvent = toCoreTrackEvent(normalized);
+  if (!coreEvent) return;
+  activeCore.trackEvent(coreEvent as any);
+  clearPendingPurchaseProductId('notifyPurchaseFailed');
 }
 
 /**

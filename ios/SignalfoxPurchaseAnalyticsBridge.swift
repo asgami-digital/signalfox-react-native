@@ -239,32 +239,18 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     return (price, currency, isSubscription ? "subscription" : "inapp", hasTrial, trialDays)
   }
 
+  /// Emisión **inmediata** cuando `SKPaymentQueue` entra en `.purchasing`.
+  /// No esperamos a `Product.products` (puede colgar y retrasar o silenciar el evento).
+  /// Si usas solo StoreKit 2 `Product.purchase()` y no ves este callback, llama desde JS a
+  /// `notifyPurchaseStarted` justo antes de iniciar la compra.
   private func emitPurchaseStarted(productId: String) {
-    if #available(iOS 15.0, *) {
-      Task.detached(priority: .background) {
-        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] purchase_started path: awaiting storeKitPriceInfo (loadFirstProduct ≤ ~2s) productId=%@", productId)
-        let info = await self.storeKitPriceInfo(for: productId)
-        NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] purchase_started path: storeKitPriceInfo done, emitting to RN productId=%@", productId)
-        SignalfoxPurchaseEventEmitter.emit([
-          "eventName": "purchase_started",
-          "platform": "ios",
-          "store": "app_store",
-          "productId": productId,
-          "productType": info.productType as Any,
-          "price": info.price as Any,
-          "currency": info.currency as Any,
-          "hasTrial": info.hasTrial,
-          "trialDays": info.trialDays as Any,
-        ])
-      }
-    } else {
-      SignalfoxPurchaseEventEmitter.emit([
-        "eventName": "purchase_started",
-        "platform": "ios",
-        "store": "app_store",
-        "productId": productId
-      ])
-    }
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitPurchaseStarted IMMEDIATE productId=%@", productId)
+    SignalfoxPurchaseEventEmitter.emit([
+      "eventName": "purchase_started",
+      "platform": "ios",
+      "store": "app_store",
+      "productId": productId,
+    ])
   }
 
   private func emitPurchaseFailedOrCancelled(transaction: SKPaymentTransaction) {
@@ -423,28 +409,14 @@ private extension SignalfoxPurchaseAnalyticsTracker {
         "productType": productType,
         "price": price as Any,
         "currency": currency as Any,
-        "hasTrial": hasTrial,
-        "trialDays": trialDays as Any,
         "transactionId": String(transaction.id),
         "originalTransactionId": String(transaction.originalID),
         "environment": environment,
       ])
     }
 
-    if hasTrial {
-      SignalfoxPurchaseEventEmitter.emit([
-        "eventName": "trial_started",
-        "platform": platform,
-        "store": store,
-        "productId": productId,
-        "productType": productType,
-        "hasTrial": true,
-        "trialDays": trialDays as Any,
-        "transactionId": String(transaction.id),
-        "originalTransactionId": String(transaction.originalID),
-        "environment": environment,
-      ])
-    }
+    // No emitimos `trial_started`: el catálogo puede tener trial aunque el usuario ya lo haya
+    // consumido; no hay forma fiable aquí de saber si aplica. Solo `subscription_started`.
 
     // IMPORTANTE: en StoreKit2 se recomienda terminar la transacción para evitar
     // re-emisiones en `Transaction.updates`. Esto no consume la compra, solo marca
