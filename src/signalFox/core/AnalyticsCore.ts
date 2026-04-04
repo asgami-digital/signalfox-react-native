@@ -190,12 +190,15 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   private processEvent(
-    event: { type: AnalyticsEventType } & Record<string, unknown>,
-    eventTimestamp: number
+    event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
     if (this.sendPermanentlyDisabled) {
       return;
     }
+
+    // Timestamp en el momento en que el evento se materializa en la cola (tras el delay
+    // de resolución de pantalla si aplica), no en la llamada inicial a trackEvent.
+    const eventTimestamp = Date.now();
 
     // Siempre adjuntamos el modal "padre" (último abierto) para enlazar jerarquías de UI.
     // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
@@ -257,11 +260,11 @@ export class AnalyticsCore implements IAnalyticsCore {
   trackEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
-    const eventTimestamp = Date.now();
     if (event.type === 'app_background') {
+      const receivedAt = Date.now();
       console.log('[AUTO_ANALYTICS] app_background received', {
-        ts_ms: eventTimestamp,
-        ts_iso: new Date(eventTimestamp).toISOString(),
+        ts_ms: receivedAt,
+        ts_iso: new Date(receivedAt).toISOString(),
       });
     }
 
@@ -270,12 +273,12 @@ export class AnalyticsCore implements IAnalyticsCore {
       EVENT_SCREEN_RESOLUTION_DELAY_MS > 0
     ) {
       setTimeout(() => {
-        this.processEvent(event, eventTimestamp);
+        this.processEvent(event);
       }, EVENT_SCREEN_RESOLUTION_DELAY_MS);
       return;
     }
 
-    this.processEvent(event, eventTimestamp);
+    this.processEvent(event);
   }
 
   /**
