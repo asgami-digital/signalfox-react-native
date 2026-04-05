@@ -1,12 +1,12 @@
-import { AppRegistry } from 'react-native';
-import {
-  applyModalPatch,
-  applyTouchablePatch,
-} from '@asgami-digital/signalfox-react-native';
-import App from './src/App';
-import { name as appName } from './app.json';
+/**
+ * Los parches deben ejecutarse con require() antes de cargar App (evita hoisting de import).
+ */
+require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNativeModalPatch').applyModalPatch();
+require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNativeTouchablePatch').applyTouchablePatch();
+require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNavigationIntegration').applyReactNavigationPatch();
 
-applyModalPatch();
-applyTouchablePatch();
+const { AppRegistry } = require('react-native');
+const App = require('./src/App').default;
+const { name: appName } = require('./app.json');
 
 AppRegistry.registerComponent(appName, () => App);

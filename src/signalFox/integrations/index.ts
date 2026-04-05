@@ -7,5 +7,8 @@ export {
   reactNativeTouchablePatchIntegration,
   applyTouchablePatch,
 } from './reactNativeTouchablePatch';
-export { reactNavigationIntegration } from './reactNavigationIntegration';
+export {
+  applyReactNavigationPatch,
+  reactNavigationIntegration,
+} from './reactNavigationIntegration';
 export { nativePurchaseIntegration } from './nativePurchaseIntegration';

@@ -13,6 +13,7 @@ export {
   nativePurchaseIntegration,
   applyModalPatch,
   applyTouchablePatch,
+  applyReactNavigationPatch,
 } from './integrations';
 export { SignalFoxProvider, useSignalFox } from './provider';
 export type { SignalFoxProviderProps, SignalFoxContextValue } from './provider';

@@ -1,5 +1,10 @@
 /**
  * Integración con @react-navigation/native.
+ *
+ * Para capturar la intención de navegación antes de que otros módulos usen el ref,
+ * llama en el entry (p. ej. index.js) antes de importar la app:
+ *
+ * require('.../lib/module/signalFox/integrations/reactNavigationIntegration').applyReactNavigationPatch();
  */
 
 import type {
@@ -54,6 +59,21 @@ type NavPatchRegistryEntry = {
 
 const navigationRefPatchRegistry = new WeakMap<object, NavPatchRegistryEntry>();
 
+/** Objetos ya envueltos por applyReactNavigationPatch (permanente; sin unwrap al hacer teardown de la integración). */
+const permanentNavigationIntentTargets = new WeakSet<object>();
+
+const REACT_NAV_CORE_PATCH_MARKER = Symbol.for(
+  'signalFox.reactNavigationCorePatchApplied'
+);
+
+const navigationIntentHookRef: { current: (() => void) | null } = {
+  current: null,
+};
+
+function notifyNavigationIntent(): void {
+  navigationIntentHookRef.current?.();
+}
+
 function shouldMarkDispatchAction(action: unknown): boolean {
   if (typeof action === 'function') {
     return true;
@@ -105,19 +125,153 @@ function buildActiveRouteBranchKey(state: NavStateLike | undefined): string {
   return JSON.stringify(segments);
 }
 
+function wrapNavigationTargetMethods(
+  nav: NavPatchTarget,
+  onIntent: () => void
+): () => void {
+  const originals = new Map<string, (...args: unknown[]) => unknown>();
+
+  for (const name of NAV_METHODS_TO_WRAP) {
+    const value = nav[name];
+    if (typeof value !== 'function') {
+      continue;
+    }
+    const original = value as (...args: unknown[]) => unknown;
+    originals.set(name, original);
+    nav[name] = (...args: unknown[]) => {
+      onIntent();
+      return original.apply(nav, args);
+    };
+  }
+
+  const dispatchVal = nav.dispatch;
+  if (typeof dispatchVal === 'function' && !originals.has('dispatch')) {
+    const originalDispatch = dispatchVal as (action: unknown) => unknown;
+    originals.set('dispatch', originalDispatch);
+    nav.dispatch = (action: unknown) => {
+      if (shouldMarkDispatchAction(action)) {
+        onIntent();
+      }
+      return originalDispatch.call(nav, action);
+    };
+  }
+
+  return () => {
+    for (const [name, fn] of originals) {
+      nav[name] = fn;
+    }
+  };
+}
+
+function isPermanentNavigationIntentTarget(target: unknown): boolean {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    permanentNavigationIntentTargets.has(target as object)
+  );
+}
+
+/**
+ * Parche permanente (entry temprano): envuelve métodos una sola vez por objeto.
+ * El teardown de la integración solo pone a null el hook; no restaura métodos.
+ */
+function applyPermanentNavigationIntentPatch(target: unknown): void {
+  if (!target || typeof target !== 'object') {
+    return;
+  }
+  const key = target as object;
+  if (permanentNavigationIntentTargets.has(key)) {
+    return;
+  }
+  permanentNavigationIntentTargets.add(key);
+  wrapNavigationTargetMethods(key as NavPatchTarget, notifyNavigationIntent);
+}
+
+function instrumentNavigationContainerRefFromFactory(ref: unknown): void {
+  if (!ref || typeof ref !== 'object') {
+    return;
+  }
+  const obj = ref as NavPatchTarget & { current?: unknown };
+
+  applyPermanentNavigationIntentPatch(obj);
+
+  const desc = Object.getOwnPropertyDescriptor(obj, 'current');
+  if (desc?.set && desc.get) {
+    const origSet = desc.set;
+    try {
+      Object.defineProperty(obj, 'current', {
+        configurable: true,
+        enumerable: desc.enumerable,
+        get: desc.get,
+        set(value: unknown) {
+          if (value && typeof value === 'object') {
+            applyPermanentNavigationIntentPatch(value);
+          }
+          origSet.call(obj, value);
+        },
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  const cur = obj.current;
+  if (cur && typeof cur === 'object') {
+    applyPermanentNavigationIntentPatch(cur);
+  }
+}
+
+/**
+ * Parchea `createNavigationContainerRef` en `@react-navigation/core` antes de que la app importe
+ * `@react-navigation/native`, para que navigate/dispatch/push/etc. disparen el hook desde el primer uso.
+ */
+export function applyReactNavigationPatch(): void {
+  try {
+    const core = require('@react-navigation/core') as Record<
+      PropertyKey,
+      unknown
+    >;
+    if (core[REACT_NAV_CORE_PATCH_MARKER]) {
+      return;
+    }
+    core[REACT_NAV_CORE_PATCH_MARKER] = true;
+    const original = core.createNavigationContainerRef;
+    if (typeof original !== 'function') {
+      return;
+    }
+    core.createNavigationContainerRef =
+      function signalFoxPatchedCreateNavigationContainerRef(
+        ...args: unknown[]
+      ) {
+        const ref = (original as (...a: unknown[]) => unknown).apply(
+          this,
+          args
+        );
+        instrumentNavigationContainerRefFromFactory(ref);
+        return ref;
+      };
+  } catch {
+    // @react-navigation/core no instalado o entorno sin require
+  }
+}
+
 /**
  * Envuelve métodos del ref / objeto de navegación para registrar el instante de la intención.
  * Idempotente por objeto: varias inicializaciones incrementan refCount; cada release lo decrementa.
  */
 function acquireNavigationRefIntentPatch(
   target: unknown,
-  onNavigationIntent: () => void
+  onIntent: () => void
 ): () => void {
   if (!target || typeof target !== 'object') {
     return () => {};
   }
 
   const key = target as object;
+  if (permanentNavigationIntentTargets.has(key)) {
+    return () => {};
+  }
+
   const existing = navigationRefPatchRegistry.get(key);
   if (existing) {
     existing.refCount += 1;
@@ -131,38 +285,7 @@ function acquireNavigationRefIntentPatch(
   }
 
   const nav = target as NavPatchTarget;
-  const originals = new Map<string, (...args: unknown[]) => unknown>();
-
-  for (const name of NAV_METHODS_TO_WRAP) {
-    const value = nav[name];
-    if (typeof value !== 'function') {
-      continue;
-    }
-    const original = value as (...args: unknown[]) => unknown;
-    originals.set(name, original);
-    nav[name] = (...args: unknown[]) => {
-      onNavigationIntent();
-      return original.apply(nav, args);
-    };
-  }
-
-  const dispatchVal = nav.dispatch;
-  if (typeof dispatchVal === 'function' && !originals.has('dispatch')) {
-    const originalDispatch = dispatchVal as (action: unknown) => unknown;
-    originals.set('dispatch', originalDispatch);
-    nav.dispatch = (action: unknown) => {
-      if (shouldMarkDispatchAction(action)) {
-        onNavigationIntent();
-      }
-      return originalDispatch.call(nav, action);
-    };
-  }
-
-  const restore = () => {
-    for (const [name, fn] of originals) {
-      nav[name] = fn;
-    }
-  };
+  const restore = wrapNavigationTargetMethods(nav, onIntent);
 
   navigationRefPatchRegistry.set(key, { refCount: 1, restore });
 
@@ -391,27 +514,24 @@ export function reactNavigationIntegration(
         pendingNavigationTimestamp = Date.now();
       };
 
+      navigationIntentHookRef.current = markNavigationIntent;
+
       const releasePatches: Array<() => void> = [];
-      releasePatches.push(
-        acquireNavigationRefIntentPatch(
-          navigationRef as unknown,
-          markNavigationIntent
-        )
-      );
-      releasePatches.push(
-        acquireNavigationRefIntentPatch(
-          navigationRef.current as unknown,
-          markNavigationIntent
-        )
-      );
+
+      const patchIntentIfNotFactoryWrapped = (target: unknown) => {
+        if (isPermanentNavigationIntentTarget(target)) {
+          return;
+        }
+        releasePatches.push(
+          acquireNavigationRefIntentPatch(target, notifyNavigationIntent)
+        );
+      };
+
+      patchIntentIfNotFactoryWrapped(navigationRef as unknown);
+      patchIntentIfNotFactoryWrapped(navigationRef.current as unknown);
 
       const patchCurrentWhenReady = () => {
-        releasePatches.push(
-          acquireNavigationRefIntentPatch(
-            navigationRef.current as unknown,
-            markNavigationIntent
-          )
-        );
+        patchIntentIfNotFactoryWrapped(navigationRef.current as unknown);
       };
 
       const handleStateChange = () => {
@@ -530,6 +650,7 @@ export function reactNavigationIntegration(
       return () => {
         for (const u of unsubscribers) u();
         if (interval) clearInterval(interval);
+        navigationIntentHookRef.current = null;
         for (const release of releasePatches) release();
       };
     },
