@@ -1,10 +1,8 @@
 /**
  * Integración con @react-navigation/native.
  *
- * Para capturar la intención de navegación antes de que otros módulos usen el ref,
- * llama en el entry (p. ej. index.js) antes de importar la app:
- *
- * require('.../lib/module/signalFox/integrations/reactNavigationIntegration').applyReactNavigationPatch();
+ * La marca de intención de navegación (`intent_ts`) usa el evento interno `__unsafe_action__`
+ * del contenedor, sin monkey-patch de navigate/dispatch en el ref.
  */
 
 import type {
@@ -36,43 +34,6 @@ const DISPATCH_INTENT_TYPES = new Set<string>([
   'POP_TO',
   'JUMP_TO',
 ]);
-
-const NAV_METHODS_TO_WRAP = [
-  'navigate',
-  'navigateDeprecated',
-  'reset',
-  'resetRoot',
-  'goBack',
-  'push',
-  'replace',
-  'pop',
-  'popToTop',
-  'popTo',
-] as const;
-
-type NavPatchTarget = Record<string, unknown>;
-
-type NavPatchRegistryEntry = {
-  refCount: number;
-  restore: () => void;
-};
-
-const navigationRefPatchRegistry = new WeakMap<object, NavPatchRegistryEntry>();
-
-/** Objetos ya envueltos por applyReactNavigationPatch (permanente; sin unwrap al hacer teardown de la integración). */
-const permanentNavigationIntentTargets = new WeakSet<object>();
-
-const REACT_NAV_CORE_PATCH_MARKER = Symbol.for(
-  'signalFox.reactNavigationCorePatchApplied'
-);
-
-const navigationIntentHookRef: { current: (() => void) | null } = {
-  current: null,
-};
-
-function notifyNavigationIntent(): void {
-  navigationIntentHookRef.current?.();
-}
 
 function shouldMarkDispatchAction(action: unknown): boolean {
   if (typeof action === 'function') {
@@ -125,183 +86,6 @@ function buildActiveRouteBranchKey(state: NavStateLike | undefined): string {
   return JSON.stringify(segments);
 }
 
-function wrapNavigationTargetMethods(
-  nav: NavPatchTarget,
-  onIntent: () => void
-): () => void {
-  const originals = new Map<string, (...args: unknown[]) => unknown>();
-
-  for (const name of NAV_METHODS_TO_WRAP) {
-    const value = nav[name];
-    if (typeof value !== 'function') {
-      continue;
-    }
-    const original = value as (...args: unknown[]) => unknown;
-    originals.set(name, original);
-    nav[name] = (...args: unknown[]) => {
-      onIntent();
-      return original.apply(nav, args);
-    };
-  }
-
-  const dispatchVal = nav.dispatch;
-  if (typeof dispatchVal === 'function' && !originals.has('dispatch')) {
-    const originalDispatch = dispatchVal as (action: unknown) => unknown;
-    originals.set('dispatch', originalDispatch);
-    nav.dispatch = (action: unknown) => {
-      if (shouldMarkDispatchAction(action)) {
-        onIntent();
-      }
-      return originalDispatch.call(nav, action);
-    };
-  }
-
-  return () => {
-    for (const [name, fn] of originals) {
-      nav[name] = fn;
-    }
-  };
-}
-
-function isPermanentNavigationIntentTarget(target: unknown): boolean {
-  return (
-    typeof target === 'object' &&
-    target !== null &&
-    permanentNavigationIntentTargets.has(target as object)
-  );
-}
-
-/**
- * Parche permanente (entry temprano): envuelve métodos una sola vez por objeto.
- * El teardown de la integración solo pone a null el hook; no restaura métodos.
- */
-function applyPermanentNavigationIntentPatch(target: unknown): void {
-  if (!target || typeof target !== 'object') {
-    return;
-  }
-  const key = target as object;
-  if (permanentNavigationIntentTargets.has(key)) {
-    return;
-  }
-  permanentNavigationIntentTargets.add(key);
-  wrapNavigationTargetMethods(key as NavPatchTarget, notifyNavigationIntent);
-}
-
-function instrumentNavigationContainerRefFromFactory(ref: unknown): void {
-  if (!ref || typeof ref !== 'object') {
-    return;
-  }
-  const obj = ref as NavPatchTarget & { current?: unknown };
-
-  applyPermanentNavigationIntentPatch(obj);
-
-  const desc = Object.getOwnPropertyDescriptor(obj, 'current');
-  if (desc?.set && desc.get) {
-    const origSet = desc.set;
-    try {
-      Object.defineProperty(obj, 'current', {
-        configurable: true,
-        enumerable: desc.enumerable,
-        get: desc.get,
-        set(value: unknown) {
-          if (value && typeof value === 'object') {
-            applyPermanentNavigationIntentPatch(value);
-          }
-          origSet.call(obj, value);
-        },
-      });
-    } catch {
-      // ignore
-    }
-  }
-
-  const cur = obj.current;
-  if (cur && typeof cur === 'object') {
-    applyPermanentNavigationIntentPatch(cur);
-  }
-}
-
-/**
- * Parchea `createNavigationContainerRef` en `@react-navigation/core` antes de que la app importe
- * `@react-navigation/native`, para que navigate/dispatch/push/etc. disparen el hook desde el primer uso.
- */
-export function applyReactNavigationPatch(): void {
-  try {
-    const core = require('@react-navigation/core') as Record<
-      PropertyKey,
-      unknown
-    >;
-    if (core[REACT_NAV_CORE_PATCH_MARKER]) {
-      return;
-    }
-    core[REACT_NAV_CORE_PATCH_MARKER] = true;
-    const original = core.createNavigationContainerRef;
-    if (typeof original !== 'function') {
-      return;
-    }
-    core.createNavigationContainerRef =
-      function signalFoxPatchedCreateNavigationContainerRef(
-        ...args: unknown[]
-      ) {
-        const ref = (original as (...a: unknown[]) => unknown).apply(
-          this,
-          args
-        );
-        instrumentNavigationContainerRefFromFactory(ref);
-        return ref;
-      };
-  } catch {
-    // @react-navigation/core no instalado o entorno sin require
-  }
-}
-
-/**
- * Envuelve métodos del ref / objeto de navegación para registrar el instante de la intención.
- * Idempotente por objeto: varias inicializaciones incrementan refCount; cada release lo decrementa.
- */
-function acquireNavigationRefIntentPatch(
-  target: unknown,
-  onIntent: () => void
-): () => void {
-  if (!target || typeof target !== 'object') {
-    return () => {};
-  }
-
-  const key = target as object;
-  if (permanentNavigationIntentTargets.has(key)) {
-    return () => {};
-  }
-
-  const existing = navigationRefPatchRegistry.get(key);
-  if (existing) {
-    existing.refCount += 1;
-    return () => {
-      existing.refCount -= 1;
-      if (existing.refCount <= 0) {
-        existing.restore();
-        navigationRefPatchRegistry.delete(key);
-      }
-    };
-  }
-
-  const nav = target as NavPatchTarget;
-  const restore = wrapNavigationTargetMethods(nav, onIntent);
-
-  navigationRefPatchRegistry.set(key, { refCount: 1, restore });
-
-  return () => {
-    const entry = navigationRefPatchRegistry.get(key);
-    if (!entry) {
-      return;
-    }
-    entry.refCount -= 1;
-    if (entry.refCount <= 0) {
-      entry.restore();
-      navigationRefPatchRegistry.delete(key);
-    }
-  };
-}
-
 interface RouteChainEntry {
   name: string;
   presentation?: string;
@@ -316,16 +100,23 @@ interface NavigatorContextPayload {
   parent_modal: string | null;
 }
 
+/** Payload típico del evento interno `__unsafe_action__` del NavigationContainer. */
+type NavigationUnsafeActionEvent = {
+  data?: { action?: unknown };
+};
+
 export interface NavigationRefLike {
   current: {
     getRootState(): unknown;
     isReady?(): boolean;
-    /** Compatible con @react-navigation/native (event map tipado). */
-
-    addListener?: (type: any, listener: () => void) => () => void;
   } | null;
 
-  addListener?: (type: any, listener: () => void) => () => void;
+  /**
+   * En `createNavigationContainerRef` / NavigationContainer: `state`, `ready`,
+   * `__unsafe_action__`, etc. La firma real es genérica; usamos `unknown` para que
+   * `NavigationContainerRefWithCurrent` sea asignable aquí.
+   */
+  addListener?: unknown;
 }
 
 export interface ReactNavigationIntegrationOptions {
@@ -514,26 +305,6 @@ export function reactNavigationIntegration(
         pendingNavigationTimestamp = Date.now();
       };
 
-      navigationIntentHookRef.current = markNavigationIntent;
-
-      const releasePatches: Array<() => void> = [];
-
-      const patchIntentIfNotFactoryWrapped = (target: unknown) => {
-        if (isPermanentNavigationIntentTarget(target)) {
-          return;
-        }
-        releasePatches.push(
-          acquireNavigationRefIntentPatch(target, notifyNavigationIntent)
-        );
-      };
-
-      patchIntentIfNotFactoryWrapped(navigationRef as unknown);
-      patchIntentIfNotFactoryWrapped(navigationRef.current as unknown);
-
-      const patchCurrentWhenReady = () => {
-        patchIntentIfNotFactoryWrapped(navigationRef.current as unknown);
-      };
-
       const handleStateChange = () => {
         const ref = navigationRef.current;
         if (!ref?.getRootState) return;
@@ -606,13 +377,28 @@ export function reactNavigationIntegration(
       };
 
       const unsubscribers: Array<() => void> = [];
-      const addStateListener = (
-        target:
-          | { addListener?: (type: string, listener: () => void) => () => void }
-          | null
-          | undefined
-      ) => {
-        const fn = target?.addListener;
+
+      /**
+       * API interna del contenedor: se emite en cada acción procesada (navigate desde pantallas, ref, etc.).
+       * Sirve para intent_ts sin monkey-patch de navigate/dispatch en el ref.
+       */
+      const addListener = navigationRef.addListener;
+      if (typeof addListener === 'function') {
+        const unsubUnsafe = addListener.call(
+          navigationRef,
+          '__unsafe_action__',
+          (event?: NavigationUnsafeActionEvent) => {
+            const action = event?.data?.action;
+            if (!shouldMarkDispatchAction(action)) return;
+            markNavigationIntent();
+          }
+        );
+        if (typeof unsubUnsafe === 'function') unsubscribers.push(unsubUnsafe);
+      }
+
+      const addStateListener = (target: unknown) => {
+        if (!target || typeof target !== 'object') return;
+        const fn = (target as { addListener?: unknown }).addListener;
         if (typeof fn !== 'function') return;
         const unsub = fn.call(target, 'state', handleStateChange);
         if (typeof unsub === 'function') unsubscribers.push(unsub);
@@ -623,9 +409,8 @@ export function reactNavigationIntegration(
       addStateListener(navigationRef.current);
 
       // Algunas implementaciones emiten 'ready' (si existe, disparamos al primer estado válido).
-      if (typeof navigationRef.addListener === 'function') {
-        const unsubReady = navigationRef.addListener('ready', () => {
-          patchCurrentWhenReady();
+      if (typeof addListener === 'function') {
+        const unsubReady = addListener.call(navigationRef, 'ready', () => {
           handleStateChange();
         });
         if (typeof unsubReady === 'function') unsubscribers.push(unsubReady);
@@ -640,7 +425,6 @@ export function reactNavigationIntegration(
       // Intento inicial si el container ya está listo.
       try {
         if (navigationRef.current?.isReady?.()) {
-          patchCurrentWhenReady();
           handleStateChange();
         }
       } catch {
@@ -650,8 +434,6 @@ export function reactNavigationIntegration(
       return () => {
         for (const u of unsubscribers) u();
         if (interval) clearInterval(interval);
-        navigationIntentHookRef.current = null;
-        for (const release of releasePatches) release();
       };
     },
   };

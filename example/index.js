@@ -3,7 +3,6 @@
  */
 require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNativeModalPatch').applyModalPatch();
 require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNativeTouchablePatch').applyTouchablePatch();
-require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNavigationIntegration').applyReactNavigationPatch();
 
 const { AppRegistry } = require('react-native');
 const App = require('./src/App').default;
