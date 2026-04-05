@@ -304,6 +304,7 @@ export function reactNavigationIntegration(
       const markNavigationIntent = () => {
         pendingNavigationTimestamp = Date.now();
       };
+      markNavigationIntent();
 
       const handleStateChange = () => {
         const ref = navigationRef.current;
