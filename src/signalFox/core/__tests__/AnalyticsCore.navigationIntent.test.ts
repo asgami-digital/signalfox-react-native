@@ -52,7 +52,11 @@ describe('AnalyticsCore navigation intent buffer', () => {
     await core.flush();
 
     expect(mockedSendEvents).toHaveBeenCalledTimes(1);
-    const dto = mockedSendEvents.mock.calls[0][0].events[0] as {
+    const firstCall = mockedSendEvents.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const sendPayload = firstCall![0];
+    expect(sendPayload.events?.[0]).toBeDefined();
+    const dto = sendPayload.events![0] as {
       event_timestamp?: string | null;
     };
     expect(dto.event_timestamp).toBe(new Date(ts).toISOString());
@@ -85,7 +89,11 @@ describe('AnalyticsCore navigation intent buffer', () => {
     await core.flush();
 
     expect(mockedSendEvents).toHaveBeenCalledTimes(1);
-    const events = mockedSendEvents.mock.calls[0][0].events as Array<{
+    const secondBatchCall = mockedSendEvents.mock.calls[0];
+    expect(secondBatchCall).toBeDefined();
+    const sendPayload = secondBatchCall![0];
+    expect(sendPayload.events).toBeDefined();
+    const events = sendPayload.events as Array<{
       event_name?: string;
       screen_name?: string | null;
     }>;
