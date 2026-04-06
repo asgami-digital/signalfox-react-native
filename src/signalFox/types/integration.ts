@@ -22,6 +22,15 @@ export interface IAnalyticsCore {
   sendEvent?(name: string, properties: Record<string, unknown>): void;
   trackStep(params: FlowStepParams): void;
   trackSubview(params: SubviewParams): void;
+
+  /**
+   * React Navigation: retiene eventos (excepto `screen_view`) hasta `clearNavigationIntentPending`
+   * o hasta `NAVIGATION_INTENT_BUFFER_MAX_MS` sin resolver.
+   */
+  markNavigationIntentPending?(): void;
+  clearNavigationIntentPending?(): void;
+  /** Llamado solo al vencer el timeout del buffer; p. ej. para limpiar `pendingNavigationTimestamp` local. */
+  setNavigationIntentTimeoutListener?(listener: (() => void) | null): void;
 }
 
 export interface AnalyticsIntegration {

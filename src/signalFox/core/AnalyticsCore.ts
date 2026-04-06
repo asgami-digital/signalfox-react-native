@@ -24,6 +24,7 @@ import {
   EVENT_SCREEN_RESOLUTION_DELAY_MS,
   isDevApiKey,
   isPurchaseFamilyEventType,
+  NAVIGATION_INTENT_BUFFER_MAX_MS,
   shouldDelayScreenResolution,
 } from './constants';
 import { getActiveModalId } from './modalStack';
@@ -75,6 +76,14 @@ export class AnalyticsCore implements IAnalyticsCore {
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   /** Tras un 4xx irreversible (p. ej. API key inválida): no más red ni cola. */
   private sendPermanentlyDisabled = false;
+
+  /** `__unsafe_action__` sin `state` aún: eventos (≠ screen_view) esperan resolución de pantalla. */
+  private navigationIntentPendingSinceMs: number | null = null;
+  private navigationIntentTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly navigationIntentBuffer: Array<
+    { type: AnalyticsEventType } & Record<string, unknown>
+  > = [];
+  private navigationIntentTimeoutListener: (() => void) | null = null;
 
   constructor(config: AnalyticsCoreConfig) {
     this.apiKey = config.apiKey;
@@ -133,6 +142,45 @@ export class AnalyticsCore implements IAnalyticsCore {
 
   getSessionId(): string | null {
     return this.sessionId;
+  }
+
+  markNavigationIntentPending(): void {
+    const marker = Date.now();
+    this.navigationIntentPendingSinceMs = marker;
+    if (this.navigationIntentTimer) {
+      clearTimeout(this.navigationIntentTimer);
+      this.navigationIntentTimer = null;
+    }
+    this.navigationIntentTimer = setTimeout(() => {
+      this.navigationIntentTimer = null;
+      if (this.navigationIntentPendingSinceMs !== marker) {
+        return;
+      }
+      this.navigationIntentPendingSinceMs = null;
+      this.navigationIntentTimeoutListener?.();
+      this.flushNavigationIntentBuffer();
+    }, NAVIGATION_INTENT_BUFFER_MAX_MS);
+  }
+
+  clearNavigationIntentPending(): void {
+    if (this.navigationIntentTimer) {
+      clearTimeout(this.navigationIntentTimer);
+      this.navigationIntentTimer = null;
+    }
+    this.navigationIntentPendingSinceMs = null;
+    this.flushNavigationIntentBuffer();
+  }
+
+  setNavigationIntentTimeoutListener(listener: (() => void) | null): void {
+    this.navigationIntentTimeoutListener =
+      typeof listener === 'function' ? listener : null;
+  }
+
+  private flushNavigationIntentBuffer(): void {
+    while (this.navigationIntentBuffer.length > 0) {
+      const ev = this.navigationIntentBuffer.shift()!;
+      this.processEvent(ev);
+    }
   }
 
   private pickOptionalString(value: unknown): string | null {
@@ -288,6 +336,14 @@ export class AnalyticsCore implements IAnalyticsCore {
         ts_ms: receivedAt,
         ts_iso: new Date(receivedAt).toISOString(),
       });
+    }
+
+    if (
+      this.navigationIntentPendingSinceMs !== null &&
+      event.type !== 'screen_view'
+    ) {
+      this.navigationIntentBuffer.push(event);
+      return;
     }
 
     if (
@@ -506,6 +562,7 @@ export class AnalyticsCore implements IAnalyticsCore {
 
   destroy(): void {
     this.stopFlushTimer();
+    this.clearNavigationIntentPending();
     this.scheduleFlush();
   }
 }

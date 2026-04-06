@@ -1,0 +1,118 @@
+jest.mock('../../../NativeSignalfoxReactNative', () => ({
+  default: {
+    getAppVersion: jest.fn(() => Promise.resolve('1.0.0')),
+    getAnonymousId: jest.fn(() => Promise.resolve('test-anon')),
+  },
+}));
+
+import { AnalyticsCore } from '../AnalyticsCore';
+import { sendEvents } from '../../api/signalFoxApi';
+import { NAVIGATION_INTENT_BUFFER_MAX_MS } from '../constants';
+
+jest.mock('../../api/signalFoxApi', () => {
+  const actual = jest.requireActual<typeof import('../../api/signalFoxApi')>(
+    '../../api/signalFoxApi'
+  );
+  return {
+    ...actual,
+    sendEvents: jest.fn(() => Promise.resolve()),
+  };
+});
+
+const mockedSendEvents = sendEvents as jest.MockedFunction<typeof sendEvents>;
+
+describe('AnalyticsCore navigation intent buffer', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockedSendEvents.mockClear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('retiene track() hasta clearNavigationIntentPending y conserva timestamp explícito', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+    core.markNavigationIntentPending();
+    const ts = 1_700_000_000_000;
+    core.trackEvent({
+      type: 'custom',
+      custom_event_name: 'tap',
+      payload: {},
+      timestamp: ts,
+    });
+    await core.flush();
+    expect(mockedSendEvents).not.toHaveBeenCalled();
+
+    core.clearNavigationIntentPending();
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const dto = mockedSendEvents.mock.calls[0][0].events[0] as {
+      event_timestamp?: string | null;
+    };
+    expect(dto.event_timestamp).toBe(new Date(ts).toISOString());
+  });
+
+  it('screen_view no se retiene y actualiza pantalla antes del flush del buffer', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+    core.trackEvent({
+      type: 'screen_view',
+      payload: { screen_name: 'Home' },
+    });
+    await core.flush();
+    mockedSendEvents.mockClear();
+
+    core.markNavigationIntentPending();
+    core.trackEvent({
+      type: 'custom',
+      custom_event_name: 'during_nav',
+      payload: {},
+    });
+    core.trackEvent({
+      type: 'screen_view',
+      payload: { screen_name: 'Detail' },
+    });
+    core.clearNavigationIntentPending();
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const events = mockedSendEvents.mock.calls[0][0].events as Array<{
+      event_name?: string;
+      screen_name?: string | null;
+    }>;
+    const order = events.map((e) => e.event_name);
+    expect(order).toEqual(['screen_view', 'custom']);
+    const during = events.find((e) => e.event_name === 'custom');
+    expect(during?.screen_name).toBe('Detail');
+  });
+
+  it('tras timeout vacía el buffer sin clearNavigationIntentPending', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+    const onTimeout = jest.fn();
+    core.setNavigationIntentTimeoutListener(onTimeout);
+
+    core.markNavigationIntentPending();
+    core.track('held', {});
+    await core.flush();
+    expect(mockedSendEvents).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(NAVIGATION_INTENT_BUFFER_MAX_MS);
+    await core.flush();
+
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+  });
+});

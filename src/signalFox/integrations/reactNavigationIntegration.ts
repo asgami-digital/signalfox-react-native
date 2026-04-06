@@ -296,15 +296,20 @@ export function reactNavigationIntegration(
   return {
     name: 'reactNavigation',
 
-    setup(core) {
+    setup(core: IAnalyticsCore): () => void {
       let previousScreenName: string | undefined;
       let lastActiveBranchKey: string | null = null;
       let pendingNavigationTimestamp: number | null = null;
 
       const markNavigationIntent = () => {
         pendingNavigationTimestamp = Date.now();
+        core.markNavigationIntentPending?.();
       };
       markNavigationIntent();
+
+      core.setNavigationIntentTimeoutListener?.(() => {
+        pendingNavigationTimestamp = null;
+      });
 
       const handleStateChange = () => {
         const ref = navigationRef.current;
@@ -314,8 +319,10 @@ export function reactNavigationIntegration(
 
         const activeBranchKey = buildActiveRouteBranchKey(state);
         if (activeBranchKey === lastActiveBranchKey) {
-          // Misma rama activa completa (p. ej. solo params): no hay transición de pantalla nueva; evita pending colgado.
+          // Misma rama activa completa (p. ej. solo params): no hay transición de
+          // pantalla nueva; evita pending colgado.
           pendingNavigationTimestamp = null;
+          core.clearNavigationIntentPending?.();
           return;
         }
         lastActiveBranchKey = activeBranchKey;
@@ -323,12 +330,14 @@ export function reactNavigationIntegration(
         const activeName = getActiveRouteName(state);
         if (activeName == null) {
           pendingNavigationTimestamp = null;
+          core.clearNavigationIntentPending?.();
           return;
         }
 
         const currentInfo = getActiveRouteInfo(state, getRoutePresentation);
         if (!currentInfo) {
           pendingNavigationTimestamp = null;
+          core.clearNavigationIntentPending?.();
           return;
         }
         const navigatorContext = buildNavigatorContext(
@@ -375,6 +384,7 @@ export function reactNavigationIntegration(
         // }
 
         previousScreenName = activeName;
+        core.clearNavigationIntentPending?.();
       };
 
       const unsubscribers: Array<() => void> = [];
@@ -433,6 +443,8 @@ export function reactNavigationIntegration(
       }
 
       return () => {
+        core.setNavigationIntentTimeoutListener?.(null);
+        core.clearNavigationIntentPending?.();
         for (const u of unsubscribers) u();
         if (interval) clearInterval(interval);
       };

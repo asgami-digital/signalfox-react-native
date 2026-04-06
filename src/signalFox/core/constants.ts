@@ -16,6 +16,12 @@ export const DEFAULT_FLUSH_INTERVAL_MS = 30_000;
  */
 export const EVENT_SCREEN_RESOLUTION_DELAY_MS = 0;
 
+/**
+ * Tras `__unsafe_action__` sin `state` aún: máximo de espera antes de adjudicar
+ * `screen_name` a eventos retenidos (navegación cancelada o sin cambio de rama).
+ */
+export const NAVIGATION_INTENT_BUFFER_MAX_MS = 2000;
+
 /** Único tipo que procesa sin esperar: fija `currentScreenName` antes que los demás. */
 const NO_SCREEN_RESOLUTION_DELAY_TYPES: ReadonlySet<AnalyticsEventType> =
   new Set<AnalyticsEventType>(['screen_view']);
