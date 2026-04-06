@@ -23,7 +23,9 @@ type ModalPropsLike = {
   visible?: boolean;
   signalFoxId?: string;
   children?: unknown;
+  onDismiss?: unknown;
   onRequestClose?: unknown;
+  onShow?: unknown;
 } & Record<string, unknown>;
 
 let OriginalModal: React.ComponentType<any>;
@@ -35,15 +37,42 @@ function inferModalTargetFromProps(props: ModalPropsLike): string | null {
 
 function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   const prevVisibleRef = useRef<boolean | undefined>(undefined);
+  const openEmittedRef = useRef<boolean>(false);
   const closeEmittedRef = useRef<boolean>(false);
   const latestTargetIdRef = useRef<string | null>(null);
+
+  const emitOpenOnce = (targetId: string | null, targetName: string | null) => {
+    if (openEmittedRef.current) return;
+    openEmittedRef.current = true;
+    closeEmittedRef.current = false;
+
+    if (typeof targetId === 'string' && targetId.length > 0) {
+      modalStackPush(targetId);
+    }
+
+    const track = modalPatchTrackRef.current;
+    if (!track) return;
+    track({
+      type: 'modal_open',
+      target_id: targetId,
+      target_name: targetName,
+      target_type: 'modal',
+      payload: {
+        modalName: targetId,
+        source: 'react_native_modal',
+        kind: 'component_modal',
+      },
+    });
+  };
 
   const emitCloseOnce = (
     targetId: string | null,
     targetName: string | null
   ) => {
+    if (!openEmittedRef.current) return;
     if (closeEmittedRef.current) return;
     closeEmittedRef.current = true;
+    openEmittedRef.current = false;
 
     // Para modal_close, el parent debe ser el modal "anterior" (stack después del pop).
     if (typeof targetId === 'string' && targetId.length > 0) {
@@ -75,47 +104,11 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     prevVisibleRef.current = visible;
 
     if (isFirstRender) {
-      if (visible) {
-        closeEmittedRef.current = false;
-        if (typeof targetId === 'string' && targetId.length > 0) {
-          // Para modal_open, el parent_modal debe coincidir con el modal abierto.
-          modalStackPush(targetId);
-        }
-        if (modalPatchTrackRef.current) {
-          modalPatchTrackRef.current({
-            type: 'modal_open',
-            target_id: targetId,
-            target_name: targetName,
-            target_type: 'modal',
-            payload: {
-              modalName: targetId,
-              source: 'react_native_modal',
-              kind: 'component_modal',
-            },
-          });
-        }
-      }
       return;
     }
-    const track = modalPatchTrackRef.current;
-    if (!track) return;
 
     if (prev === false && visible) {
       closeEmittedRef.current = false;
-      if (typeof targetId === 'string' && targetId.length > 0) {
-        modalStackPush(targetId);
-      }
-      track({
-        type: 'modal_open',
-        target_id: targetId,
-        target_name: targetName,
-        target_type: 'modal',
-        payload: {
-          modalName: targetId,
-          source: 'react_native_modal',
-          kind: 'component_modal',
-        },
-      });
     } else if (prev === true && !visible) {
       emitCloseOnce(targetId, targetName);
     }
@@ -132,7 +125,26 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     };
   }, []);
 
-  return React.createElement(OriginalModal, props);
+  const targetId = inferModalTargetFromProps(props);
+  const targetName = targetId;
+  const originalOnShow = props.onShow;
+  const originalOnDismiss = props.onDismiss;
+
+  return React.createElement(OriginalModal, {
+    ...props,
+    onShow: (...args: unknown[]) => {
+      emitOpenOnce(targetId, targetName);
+      if (typeof originalOnShow === 'function') {
+        originalOnShow(...args);
+      }
+    },
+    onDismiss: (...args: unknown[]) => {
+      emitCloseOnce(targetId, targetName);
+      if (typeof originalOnDismiss === 'function') {
+        originalOnDismiss(...args);
+      }
+    },
+  });
 }
 
 export function applyModalPatch(): void {
