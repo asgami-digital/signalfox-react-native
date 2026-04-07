@@ -89,6 +89,7 @@ function HomeScreen({ navigation }: HomeProps) {
 
       <Pressable
         signalFoxId="go_details_button"
+        signalFoxDisplayName="Go Details Button"
         style={styles.button}
         onPress={() => {
           console.log('tap_go_details');

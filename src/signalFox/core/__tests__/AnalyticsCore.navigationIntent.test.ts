@@ -62,6 +62,29 @@ describe('AnalyticsCore navigation intent buffer', () => {
     expect(dto.event_timestamp).toBe(new Date(ts).toISOString());
   });
 
+  it('modal_open no se retiene con navigation intent pendiente', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+    core.markNavigationIntentPending();
+    core.trackEvent({
+      type: 'modal_open',
+      target_type: 'modal',
+      payload: {
+        modalName: 'test',
+        source: 'react_native_modal',
+        kind: 'component_modal',
+      },
+    } as any);
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const sendPayload = mockedSendEvents.mock.calls[0]![0];
+    expect(sendPayload.events?.[0]?.event_name).toBe('modal_open');
+  });
+
   it('screen_view no se retiene y actualiza pantalla antes del flush del buffer', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',

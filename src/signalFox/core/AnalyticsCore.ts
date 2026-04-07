@@ -17,7 +17,7 @@ import {
   sendEvents,
   SignalFoxRequestError,
 } from '../api/signalFoxApi';
-import { getCanonicalTriple } from '../api/canonicalTaxonomy';
+import { EventFamily, getCanonicalTriple } from '../api/canonicalTaxonomy';
 import { toBackendEventDto } from '../api/eventMapper';
 import {
   DEFAULT_BATCH_SIZE,
@@ -66,15 +66,31 @@ function humanizeEventType(type: string): string {
 }
 
 function buildGenericSignalFoxId(params: {
-  family: string;
+  family: EventFamily;
   screenName: string | null;
   parentModal: string | null;
   eventType: string;
+  explicitSignalFoxId: string | null;
+  stepName: string | null;
 }): string {
-  const { family, screenName, parentModal, eventType } = params;
+  const { family, screenName, parentModal, eventType, explicitSignalFoxId } =
+    params;
+  if (eventType === EventFamily.Screen) {
+    return screenName ?? 'none';
+  }
+  if (family === EventFamily.Lifecycle) {
+    return eventType ?? 'unknown';
+  }
+  if (
+    family === EventFamily.Subview ||
+    family === EventFamily.Modal ||
+    family === EventFamily.Component
+  ) {
+    return explicitSignalFoxId ?? 'unknown';
+  }
   return [
     family,
-    screenName ?? 'unknown',
+    screenName ?? 'none',
     parentModal ?? 'none',
     eventType,
   ].join('|');
@@ -94,31 +110,39 @@ function buildGenericDisplayName(params: {
   }
 
   const namedModal =
-    trimOptionalString(payload.paywall_name) ?? trimOptionalString(payload.modalName);
+    trimOptionalString(payload.paywall_name) ?? trimOptionalString(payload.modalName) ?? fallbackId;
 
   switch (eventType) {
     case 'app_open':
-      return 'Aplicacion abierta';
+      return 'App opened';
     case 'app_foreground':
-      return 'Aplicacion en primer plano';
+      return 'App entered foreground';
     case 'app_background':
-      return 'Aplicacion en segundo plano';
+      return 'App entered background';
     case 'session_start':
-      return 'Sesion iniciada';
+      return 'Session started';
     case 'session_end':
-      return 'Sesion finalizada';
+      return 'Session ended';
     case 'screen_view':
-      return screenName ? `Pantalla vista: ${screenName}` : 'Pantalla vista';
+      return screenName ?? 'none';
     case 'modal_open':
-      return namedModal ? `Modal abierto: ${namedModal}` : 'Modal abierto';
+      return namedModal ?? fallbackId ?? 'none';
     case 'modal_close':
-      return namedModal ? `Modal cerrado: ${namedModal}` : 'Modal cerrado';
+      return namedModal ?? fallbackId ?? 'none';
     case 'custom': {
-      return customEventName ? `Evento custom: ${customEventName}` : 'Evento custom';
+      return customEventName ?? 'Custom event';
     }
     default:
       return fallbackId ?? humanizeEventType(eventType);
   }
+}
+
+function usesExplicitUiIdentifiersOnly(eventType: AnalyticsEventType): boolean {
+  return (
+    eventType === 'modal_open' ||
+    eventType === 'modal_close' ||
+    eventType === 'component_press'
+  );
 }
 
 export interface AnalyticsCoreConfig {
@@ -312,6 +336,7 @@ export class AnalyticsCore implements IAnalyticsCore {
   private processEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
+    console.log('processEvent', event);
     if (this.sendPermanentlyDisabled) {
       if (isPurchaseFamilyEventType(event.type)) {
         console.warn(
@@ -354,7 +379,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     (event as { payload?: unknown }).payload = nextPayload;
 
     const resolvedScreenName = this.resolveScreenName(event);
-    const family = String(getCanonicalTriple(event.type).event_family);
+    const family = getCanonicalTriple(event.type).event_family;
     const explicitSignalFoxId =
       this.pickOptionalString((event as { signalFoxId?: unknown }).signalFoxId) ??
       this.pickOptionalString((event as { target_id?: unknown }).target_id);
@@ -363,25 +388,34 @@ export class AnalyticsCore implements IAnalyticsCore {
         (event as { signalFoxDisplayName?: unknown }).signalFoxDisplayName
       ) ??
       this.pickOptionalString((event as { target_name?: unknown }).target_name);
+    const usesOnlyExplicitIdentifiers = usesExplicitUiIdentifiersOnly(event.type);
     const signalFoxId =
       explicitSignalFoxId ??
-      buildGenericSignalFoxId({
-        family,
-        screenName: resolvedScreenName,
-        parentModal,
-        eventType: event.type,
-      });
+      (usesOnlyExplicitIdentifiers
+        ? null
+        : buildGenericSignalFoxId({
+            family,
+            screenName: resolvedScreenName,
+            parentModal,
+            eventType: event.type,
+            explicitSignalFoxId,
+            stepName: this.pickOptionalString(
+              (event as { step_name?: unknown }).step_name
+            ),
+          }));
     const signalFoxDisplayName =
       explicitSignalFoxDisplayName ??
-      buildGenericDisplayName({
-        eventType: event.type,
-        screenName: resolvedScreenName,
-        payload: nextPayload,
-        fallbackId: signalFoxId,
-        customEventName: this.pickOptionalString(
-          (event as { custom_event_name?: unknown }).custom_event_name
-        ),
-      });
+      (usesOnlyExplicitIdentifiers
+        ? signalFoxId
+        : buildGenericDisplayName({
+            eventType: event.type,
+            screenName: resolvedScreenName,
+            payload: nextPayload,
+            fallbackId: signalFoxId,
+            customEventName: this.pickOptionalString(
+              (event as { custom_event_name?: unknown }).custom_event_name
+            ),
+          }));
 
     const fullEvent: AnalyticsEvent = {
       ...event,
@@ -439,9 +473,14 @@ export class AnalyticsCore implements IAnalyticsCore {
       });
     }
 
+    const bypassNavigationIntentBuffer =
+      event.type === 'screen_view' ||
+      event.type === 'modal_open' ||
+      event.type === 'modal_close';
+
     if (
       this.navigationIntentPendingSinceMs !== null &&
-      event.type !== 'screen_view'
+      !bypassNavigationIntentBuffer
     ) {
       this.navigationIntentBuffer.push(event);
       return;

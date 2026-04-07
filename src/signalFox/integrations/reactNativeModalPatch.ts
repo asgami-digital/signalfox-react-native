@@ -49,6 +49,8 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   const latestTargetIdRef = useRef<string | null>(null);
   const latestTargetDisplayNameRef = useRef<string | null>(null);
 
+  console.log('PatchedModal props', props);
+
   const emitOpenOnce = (targetId: string | null, targetName: string | null) => {
     if (openEmittedRef.current) return;
     openEmittedRef.current = true;
@@ -103,6 +105,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   };
 
   useLayoutEffect(() => {
+    console.log('caca de vaca');
     const visible = props.visible === true;
     const targetId = inferModalTargetFromProps(props);
     const targetName = inferModalDisplayNameFromProps(props);
@@ -158,10 +161,13 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
 }
 
 export function applyModalPatch(): void {
+  console.log("caca")
   const RN = require('react-native');
   if ((RN as any)[RN_MODAL_PATCH_MARKER]) return;
+  console.log("de");
   (RN as any)[RN_MODAL_PATCH_MARKER] = true;
   OriginalModal = RN.Modal;
+  console.log("vaca")
 
   try {
     Object.defineProperty(RN, 'Modal', {
@@ -171,7 +177,9 @@ export function applyModalPatch(): void {
         return PatchedModal;
       },
     });
-  } catch {
+    console.log('Modal patch applied');
+  } catch (error) {
+    console.error('Error applying modal patch', error);
     // ignore
   }
 }

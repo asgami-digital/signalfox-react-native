@@ -32,13 +32,7 @@ function extractTextFromChildren(children: unknown): string | null {
   }
   if (React.isValidElement(children)) {
     const anyEl = children as any;
-    const isText =
-      anyEl?.type &&
-      (anyEl.type === 'Text' ||
-        anyEl.type?.displayName === 'Text' ||
-        anyEl.type?.name === 'Text');
-    const inner = extractTextFromChildren(anyEl.props?.children);
-    return isText ? inner : inner;
+    return extractTextFromChildren(anyEl.props?.children);
   }
   return null;
 }
@@ -50,13 +44,19 @@ function inferTargetId(props: Record<string, unknown>): string | null {
     : null;
 }
 
-function inferTargetName(props: Record<string, unknown>): string | null {
+function inferTargetName(
+  props: Record<string, unknown>,
+  targetId: string | null
+): string | null {
   const explicitDisplayName =
     typeof (props as any).signalFoxDisplayName === 'string'
       ? ((props as any).signalFoxDisplayName as string).trim()
       : '';
   if (explicitDisplayName.length > 0) return explicitDisplayName;
+  return targetId;
+}
 
+function inferComponentText(props: Record<string, unknown>): string | null {
   const title =
     typeof (props as any).title === 'string'
       ? ((props as any).title as string).trim()
@@ -81,7 +81,8 @@ function makePatchedComponent(Original: any, componentName: string): any {
       return React.createElement(Original, props);
     }
     const targetId = inferTargetId(props);
-    const targetName = inferTargetName(props);
+    const targetName = inferTargetName(props, targetId);
+    const componentText = inferComponentText(props);
     const wrappedOnPress = (...args: any[]) => {
       const track = touchableTrackRef.current;
       if (track) {
@@ -97,6 +98,7 @@ function makePatchedComponent(Original: any, componentName: string): any {
             source: 'react_native_touchable',
             rnComponent: componentName,
             parent_modal,
+            ...(componentText ? { component_text: componentText } : {}),
           },
         });
       }

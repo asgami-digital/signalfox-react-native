@@ -24,6 +24,7 @@ export type {
   SubviewParams,
   IAnalyticsCore,
 } from './types';
+export { EventFamily, getCanonicalTriple } from './api/canonicalTaxonomy';
 export { getActiveRouteName } from './utils/getActiveRouteName';
 export {
   getActiveRouteInfo,

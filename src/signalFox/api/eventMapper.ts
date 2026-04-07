@@ -109,6 +109,8 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     country: null,
     device_model: null,
     os_version: null,
+    signalFoxId: signalFoxId,
+    signalFoxDisplayName: signalFoxDisplayName ?? signalFoxId,
     target_id: signalFoxId,
     target_name: signalFoxDisplayName ?? signalFoxId,
     properties_json: null,

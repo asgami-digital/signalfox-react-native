@@ -39,11 +39,13 @@ describe('AnalyticsCore identifiers', () => {
     const batch = mockedSendEvents.mock.calls[0]?.[0];
     const dto = batch?.events?.[0];
 
-    expect(dto?.target_id).toBe('lifecycle|unknown|none|app_open');
-    expect(dto?.target_name).toBe('Aplicacion abierta');
+    expect(dto?.signalFoxId).toBe('app_open');
+    expect(dto?.signalFoxDisplayName).toBe('App opened');
+    expect(dto?.target_id).toBe('app_open');
+    expect(dto?.target_name).toBe('App opened');
   });
 
-  it('mantiene displayName explicito y construye signalFoxId para modales sin id explicito', async () => {
+  it('mantiene displayName explicito y deja signalFoxId en null para modales sin id explicito', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -66,7 +68,60 @@ describe('AnalyticsCore identifiers', () => {
     const batch = mockedSendEvents.mock.calls[0]?.[0];
     const dto = batch?.events?.[0];
 
-    expect(dto?.target_id).toBe('modal|unknown|none|modal_open');
+    expect(dto?.signalFoxId).toBeNull();
+    expect(dto?.signalFoxDisplayName).toBe('RevenueCat Paywall');
+    expect(dto?.target_id).toBeNull();
     expect(dto?.target_name).toBe('RevenueCat Paywall');
+  });
+
+  it('deja signalFoxId y displayName en null para component_press sin identificador explicito', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    core.trackEvent({
+      type: 'component_press',
+      target_type: 'touchable',
+      payload: {
+        source: 'react_native_touchable',
+        rnComponent: 'Pressable',
+      },
+    } as any);
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const batch = mockedSendEvents.mock.calls[0]?.[0];
+    const dto = batch?.events?.[0];
+
+    expect(dto?.signalFoxId).toBeNull();
+    expect(dto?.signalFoxDisplayName).toBeNull();
+    expect(dto?.target_id).toBeNull();
+    expect(dto?.target_name).toBeNull();
+  });
+
+  it('usa el id de trackStep para flow_step_view', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    core.trackEvent({
+      type: 'flow_step_view',
+      flow_name: 'checkout',
+      step_name: 'payment_method',
+      payload: {},
+    } as any);
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const batch = mockedSendEvents.mock.calls[0]?.[0];
+    const dto = batch?.events?.[0];
+
+    expect(dto?.signalFoxId).toBe('payment_method');
+    expect(dto?.target_id).toBe('payment_method');
+    expect(dto?.step_name).toBe('payment_method');
   });
 });

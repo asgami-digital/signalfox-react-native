@@ -22,6 +22,8 @@ export interface BackendEventDto {
   navigator_context?: string | null;
   parent_modal?: string | null;
 
+  signalFoxId?: string | null;
+  signalFoxDisplayName?: string | null;
   target_id?: string | null;
   target_name?: string | null;
   target_type?: string | null;

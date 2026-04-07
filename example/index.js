@@ -1,8 +1,9 @@
 /**
  * Los parches deben ejecutarse con require() antes de cargar App (evita hoisting de import).
  */
-require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNativeModalPatch').applyModalPatch();
-require('@asgami-digital/signalfox-react-native/lib/module/signalFox/integrations/reactNativeTouchablePatch').applyTouchablePatch();
+const signalFox = require('@asgami-digital/signalfox-react-native');
+signalFox.applyModalPatch();
+signalFox.applyTouchablePatch();
 
 const { AppRegistry } = require('react-native');
 const App = require('./src/App').default;

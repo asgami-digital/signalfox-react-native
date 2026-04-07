@@ -65,19 +65,12 @@ describe('reactNativeModalPatch', () => {
     resetModalStack();
   });
 
-  it('emite modal_open solo cuando el modal realmente hace onShow', () => {
+  it('emite modal_open al montar con visible=true (no solo onShow); onShow no duplica', () => {
     const { Modal, cleanup, trackEvent } = setupPatchedModal();
     let tree!: ReactTestRenderer;
 
     act(() => {
       tree = create(<Modal visible signalFoxId="rating-modal" />);
-    });
-
-    expect(trackEvent).not.toHaveBeenCalled();
-    expect(getActiveModalId()).toBeNull();
-
-    act(() => {
-      getRenderedModalNode(tree, 'rating-modal').props.onShow?.();
     });
 
     expect(trackEvent).toHaveBeenCalledTimes(1);
@@ -89,15 +82,21 @@ describe('reactNativeModalPatch', () => {
     );
     expect(getActiveModalId()).toBe('rating-modal');
 
+    act(() => {
+      getRenderedModalNode(tree, 'rating-modal').props.onShow?.();
+    });
+
+    expect(trackEvent).toHaveBeenCalledTimes(1);
+
     cleanup();
   });
 
-  it('no emite modal_close si visible pasa a false sin haberse mostrado', () => {
+  it('no emite eventos si el modal nunca estuvo visible', () => {
     const { Modal, cleanup, trackEvent } = setupPatchedModal();
     let tree!: ReactTestRenderer;
 
     act(() => {
-      tree = create(<Modal visible signalFoxId="ghost-modal" />);
+      tree = create(<Modal visible={false} signalFoxId="ghost-modal" />);
     });
 
     act(() => {
@@ -110,16 +109,38 @@ describe('reactNativeModalPatch', () => {
     cleanup();
   });
 
-  it('emite modal_close y limpia el stack tras un modal que si se mostro', () => {
+  it('emite modal_open al pasar visible a true sin depender de onShow', () => {
+    const { Modal, cleanup, trackEvent } = setupPatchedModal();
+    let tree!: ReactTestRenderer;
+
+    act(() => {
+      tree = create(<Modal visible={false} signalFoxId="slide-modal" />);
+    });
+
+    expect(trackEvent).not.toHaveBeenCalled();
+
+    act(() => {
+      tree.update(<Modal visible signalFoxId="slide-modal" />);
+    });
+
+    expect(trackEvent).toHaveBeenCalledTimes(1);
+    expect(trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxId: 'slide-modal',
+      })
+    );
+    expect(getActiveModalId()).toBe('slide-modal');
+
+    cleanup();
+  });
+
+  it('emite modal_close y limpia el stack tras ocultar el modal', () => {
     const { Modal, cleanup, trackEvent } = setupPatchedModal();
     let tree!: ReactTestRenderer;
 
     act(() => {
       tree = create(<Modal visible signalFoxId="result-modal" />);
-    });
-
-    act(() => {
-      getRenderedModalNode(tree, 'result-modal').props.onShow?.();
     });
 
     act(() => {
@@ -159,10 +180,6 @@ describe('reactNativeModalPatch', () => {
       );
     });
 
-    act(() => {
-      getRenderedModalNode(tree, 'paywall-modal').props.onShow?.();
-    });
-
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
@@ -170,6 +187,12 @@ describe('reactNativeModalPatch', () => {
         signalFoxDisplayName: 'Paywall principal',
       })
     );
+
+    act(() => {
+      getRenderedModalNode(tree, 'paywall-modal').props.onShow?.();
+    });
+
+    expect(trackEvent).toHaveBeenCalledTimes(1);
 
     cleanup();
   });
