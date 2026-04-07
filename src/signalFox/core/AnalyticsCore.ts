@@ -17,6 +17,7 @@ import {
   sendEvents,
   SignalFoxRequestError,
 } from '../api/signalFoxApi';
+import { getCanonicalTriple } from '../api/canonicalTaxonomy';
 import { toBackendEventDto } from '../api/eventMapper';
 import {
   DEFAULT_BATCH_SIZE,
@@ -48,6 +49,76 @@ async function getNativeAppVersion(): Promise<string | null> {
       .catch(() => null);
   }
   return nativeAppVersionPromise;
+}
+
+function trimOptionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function humanizeEventType(type: string): string {
+  return type
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildGenericSignalFoxId(params: {
+  family: string;
+  screenName: string | null;
+  parentModal: string | null;
+  eventType: string;
+}): string {
+  const { family, screenName, parentModal, eventType } = params;
+  return [
+    family,
+    screenName ?? 'unknown',
+    parentModal ?? 'none',
+    eventType,
+  ].join('|');
+}
+
+function buildGenericDisplayName(params: {
+  eventType: AnalyticsEventType;
+  screenName: string | null;
+  payload: Record<string, unknown>;
+  fallbackId: string | null;
+  customEventName: string | null;
+}): string {
+  const { eventType, screenName, payload, fallbackId, customEventName } = params;
+  const payloadDisplay = trimOptionalString(payload.analyticsDisplayName);
+  if (payloadDisplay) {
+    return payloadDisplay;
+  }
+
+  const namedModal =
+    trimOptionalString(payload.paywall_name) ?? trimOptionalString(payload.modalName);
+
+  switch (eventType) {
+    case 'app_open':
+      return 'Aplicacion abierta';
+    case 'app_foreground':
+      return 'Aplicacion en primer plano';
+    case 'app_background':
+      return 'Aplicacion en segundo plano';
+    case 'session_start':
+      return 'Sesion iniciada';
+    case 'session_end':
+      return 'Sesion finalizada';
+    case 'screen_view':
+      return screenName ? `Pantalla vista: ${screenName}` : 'Pantalla vista';
+    case 'modal_open':
+      return namedModal ? `Modal abierto: ${namedModal}` : 'Modal abierto';
+    case 'modal_close':
+      return namedModal ? `Modal cerrado: ${namedModal}` : 'Modal cerrado';
+    case 'custom': {
+      return customEventName ? `Evento custom: ${customEventName}` : 'Evento custom';
+    }
+    default:
+      return fallbackId ?? humanizeEventType(eventType);
+  }
 }
 
 export interface AnalyticsCoreConfig {
@@ -184,7 +255,7 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   private pickOptionalString(value: unknown): string | null {
-    return typeof value === 'string' && value.length > 0 ? value : null;
+    return trimOptionalString(value);
   }
 
   private resolveScreenName(
@@ -283,6 +354,34 @@ export class AnalyticsCore implements IAnalyticsCore {
     (event as { payload?: unknown }).payload = nextPayload;
 
     const resolvedScreenName = this.resolveScreenName(event);
+    const family = String(getCanonicalTriple(event.type).event_family);
+    const explicitSignalFoxId =
+      this.pickOptionalString((event as { signalFoxId?: unknown }).signalFoxId) ??
+      this.pickOptionalString((event as { target_id?: unknown }).target_id);
+    const explicitSignalFoxDisplayName =
+      this.pickOptionalString(
+        (event as { signalFoxDisplayName?: unknown }).signalFoxDisplayName
+      ) ??
+      this.pickOptionalString((event as { target_name?: unknown }).target_name);
+    const signalFoxId =
+      explicitSignalFoxId ??
+      buildGenericSignalFoxId({
+        family,
+        screenName: resolvedScreenName,
+        parentModal,
+        eventType: event.type,
+      });
+    const signalFoxDisplayName =
+      explicitSignalFoxDisplayName ??
+      buildGenericDisplayName({
+        eventType: event.type,
+        screenName: resolvedScreenName,
+        payload: nextPayload,
+        fallbackId: signalFoxId,
+        customEventName: this.pickOptionalString(
+          (event as { custom_event_name?: unknown }).custom_event_name
+        ),
+      });
 
     const fullEvent: AnalyticsEvent = {
       ...event,
@@ -292,6 +391,8 @@ export class AnalyticsCore implements IAnalyticsCore {
       anonymous_id: this.anonymousId,
       platform: Platform.OS as 'ios' | 'android',
       app_version: this.appVersion,
+      signalFoxId,
+      signalFoxDisplayName,
       ...(resolvedScreenName ? { screen_name: resolvedScreenName } : {}),
     } as AnalyticsEvent;
 
@@ -409,11 +510,12 @@ export class AnalyticsCore implements IAnalyticsCore {
   trackStep(params: FlowStepParams): void {
     const flow =
       typeof params.flow_name === 'string' ? params.flow_name.trim() : '';
-    const step =
-      typeof params.step_name === 'string' ? params.step_name.trim() : '';
+    const step = typeof params.id === 'string' ? params.id.trim() : '';
+    const stepDisplayName =
+      typeof params.displayName === 'string' ? params.displayName.trim() : '';
     if (!flow || !step) {
       console.warn(
-        '[AUTO_ANALYTICS] trackStep requires non-empty flow_name and step_name'
+        '[AUTO_ANALYTICS] trackStep requires non-empty flow_name and id'
       );
       return;
     }
@@ -421,6 +523,8 @@ export class AnalyticsCore implements IAnalyticsCore {
     const ev: Record<string, unknown> = {
       type: 'flow_step_view',
       flow_name: flow,
+      signalFoxId: step,
+      ...(stepDisplayName ? { signalFoxDisplayName: stepDisplayName } : {}),
       step_name: step,
       payload: {},
     };
@@ -446,17 +550,21 @@ export class AnalyticsCore implements IAnalyticsCore {
    * No reemplaza trackStep (flujos lineales), sino subáreas activas de la screen.
    */
   trackSubview(params: SubviewParams): void {
-    const subviewName = typeof params === 'string' ? params.trim() : '';
+    const subviewName = typeof params.id === 'string' ? params.id.trim() : '';
+    const subviewDisplayName =
+      typeof params.displayName === 'string' ? params.displayName.trim() : '';
 
     if (!subviewName) {
-      console.warn('[AUTO_ANALYTICS] trackSubview requires a non-empty string');
+      console.warn('[AUTO_ANALYTICS] trackSubview requires a non-empty id');
       return;
     }
 
     this.trackEvent({
       type: 'subview_view',
-      target_id: subviewName,
-      target_name: subviewName,
+      signalFoxId: subviewName,
+      ...(subviewDisplayName
+        ? { signalFoxDisplayName: subviewDisplayName }
+        : {}),
       target_type: 'subview',
       flow_name: null,
       step_name: null,

@@ -311,8 +311,7 @@ export function notifyModalOpened(
 
   activeCore.trackEvent({
     type: 'modal_open',
-    target_id: trimmedTargetId,
-    target_name: trimmedTargetId,
+    signalFoxDisplayName: trimmedTargetId,
     target_type: 'modal',
     payload: {
       modalName: trimmedTargetId,
@@ -335,8 +334,7 @@ export function notifyModalClosed(
 
   activeCore.trackEvent({
     type: 'modal_close',
-    target_id: trimmedTargetId,
-    target_name: trimmedTargetId,
+    signalFoxDisplayName: trimmedTargetId,
     target_type: 'modal',
     payload: {
       modalName: trimmedTargetId,

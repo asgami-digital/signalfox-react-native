@@ -24,6 +24,7 @@ describe('purchase normalization', () => {
     expect(normalized).not.toBeNull();
     expect(normalized?.family).toBe('purchase');
     expect(normalized?.eventName).toBe('purchase_completed');
+    expect(normalized?.analyticsDisplayName).toBe('Compra completada');
     expect(normalized?.properties.store).toBe('app_store');
     expect(normalized?.properties.productId).toBe('pro_monthly');
     expect(normalized?.properties.hasTrial).toBe(true);
@@ -56,5 +57,15 @@ describe('purchase normalization', () => {
   ])('canonical taxonomy maps %s to family purchase', (eventName) => {
     const triple = getCanonicalTriple(eventName);
     expect(triple.event_family).toBe('purchase');
+  });
+
+  it('usa nombres legibles para analyticsDisplayName', () => {
+    const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
+      eventName: 'restore_completed',
+    });
+
+    expect(normalized?.analyticsDisplayName).toBe(
+      'Restauracion de compras completada'
+    );
   });
 });

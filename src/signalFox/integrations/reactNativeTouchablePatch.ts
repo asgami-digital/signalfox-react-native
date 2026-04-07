@@ -51,6 +51,12 @@ function inferTargetId(props: Record<string, unknown>): string | null {
 }
 
 function inferTargetName(props: Record<string, unknown>): string | null {
+  const explicitDisplayName =
+    typeof (props as any).signalFoxDisplayName === 'string'
+      ? ((props as any).signalFoxDisplayName as string).trim()
+      : '';
+  if (explicitDisplayName.length > 0) return explicitDisplayName;
+
   const title =
     typeof (props as any).title === 'string'
       ? ((props as any).title as string).trim()
@@ -84,8 +90,8 @@ function makePatchedComponent(Original: any, componentName: string): any {
         const parent_modal = getActiveModalId();
         track({
           type: 'component_press',
-          target_id: targetId,
-          target_name: targetName,
+          signalFoxId: targetId,
+          ...(targetName ? { signalFoxDisplayName: targetName } : {}),
           target_type: inferTargetType(componentName),
           payload: {
             source: 'react_native_touchable',

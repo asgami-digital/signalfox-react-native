@@ -31,6 +31,8 @@ export interface BaseAnalyticsEvent {
   anonymous_id: string;
   platform: 'ios' | 'android';
   app_version?: string;
+  signalFoxId?: string | null;
+  signalFoxDisplayName?: string | null;
 }
 
 export interface ScreenViewEvent extends BaseAnalyticsEvent {
@@ -57,8 +59,8 @@ export interface ModalEventPayload {
 
 export interface ModalEvent extends BaseAnalyticsEvent {
   type: 'modal_open' | 'modal_close';
-  target_id: string | null;
-  target_name: string | null;
+  signalFoxId: string | null;
+  signalFoxDisplayName?: string | null;
   target_type: 'modal';
   payload: ModalEventPayload;
 }
@@ -71,26 +73,30 @@ export interface ComponentPressPayload {
 
 export interface ComponentPressEvent extends BaseAnalyticsEvent {
   type: 'component_press';
-  target_id: string | null;
-  target_name: string | null;
+  signalFoxId: string | null;
+  signalFoxDisplayName?: string | null;
   target_type: 'button' | 'touchable' | 'tab' | 'unknown';
   payload: ComponentPressPayload;
 }
 
 export type FlowStepParams = {
   flow_name: string;
-  step_name: string;
+  id: string;
+  displayName?: string;
   step_index?: number;
   /** Si se omite, se usa la pantalla actual del core (puede ser null en el primer render). */
   screen_name?: string;
 };
 
-export type SubviewParams = string;
+export type SubviewParams = {
+  id: string;
+  displayName?: string;
+};
 
 export interface SubviewViewEvent extends BaseAnalyticsEvent {
   type: 'subview_view';
-  target_id: string;
-  target_name: string;
+  signalFoxId: string;
+  signalFoxDisplayName?: string | null;
   target_type: 'subview';
   flow_name: null;
   step_name: null;
@@ -101,6 +107,8 @@ export interface SubviewViewEvent extends BaseAnalyticsEvent {
 export interface FlowStepViewEvent extends BaseAnalyticsEvent {
   type: 'flow_step_view';
   flow_name: string;
+  signalFoxId: string;
+  signalFoxDisplayName?: string | null;
   step_name: string;
   step_index?: number;
   payload?: Record<string, unknown>;

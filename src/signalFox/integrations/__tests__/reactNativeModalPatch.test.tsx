@@ -84,7 +84,7 @@ describe('reactNativeModalPatch', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        target_id: 'rating-modal',
+        signalFoxId: 'rating-modal',
       })
     );
     expect(getActiveModalId()).toBe('rating-modal');
@@ -130,17 +130,46 @@ describe('reactNativeModalPatch', () => {
       1,
       expect.objectContaining({
         type: 'modal_open',
-        target_id: 'result-modal',
+        signalFoxId: 'result-modal',
       })
     );
     expect(trackEvent).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         type: 'modal_close',
-        target_id: 'result-modal',
+        signalFoxId: 'result-modal',
       })
     );
     expect(getActiveModalId()).toBeNull();
+
+    cleanup();
+  });
+
+  it('envia signalFoxDisplayName cuando el modal lo define', () => {
+    const { Modal, cleanup, trackEvent } = setupPatchedModal();
+    let tree!: ReactTestRenderer;
+
+    act(() => {
+      tree = create(
+        <Modal
+          visible
+          signalFoxId="paywall-modal"
+          signalFoxDisplayName="Paywall principal"
+        />
+      );
+    });
+
+    act(() => {
+      getRenderedModalNode(tree, 'paywall-modal').props.onShow?.();
+    });
+
+    expect(trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxId: 'paywall-modal',
+        signalFoxDisplayName: 'Paywall principal',
+      })
+    );
 
     cleanup();
   });

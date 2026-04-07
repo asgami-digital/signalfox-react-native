@@ -45,6 +45,27 @@ function pickOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+function buildPurchaseDisplayName(
+  eventName: PurchaseAnalyticsEventName
+): string {
+  switch (eventName) {
+    case 'purchase_started':
+      return 'Compra iniciada';
+    case 'purchase_cancelled':
+      return 'Compra cancelada';
+    case 'purchase_failed':
+      return 'Compra fallida';
+    case 'purchase_completed':
+      return 'Compra completada';
+    case 'subscription_started':
+      return 'Suscripcion iniciada';
+    case 'trial_started':
+      return 'Periodo de prueba iniciado';
+    case 'restore_completed':
+      return 'Restauracion de compras completada';
+  }
+}
+
 /**
  * Normaliza un evento nativo (StoreKit/Billing) hacia un evento canónico del backend.
  *
@@ -101,7 +122,7 @@ export function normalizeNativePurchaseEventToAnalyticsEvent(
   return {
     family: 'purchase',
     eventName,
-    analyticsDisplayName: eventName,
+    analyticsDisplayName: buildPurchaseDisplayName(eventName),
     properties,
   };
 }

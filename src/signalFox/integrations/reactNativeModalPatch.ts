@@ -22,6 +22,7 @@ function setModalPatchTrack(fn: TrackFn | null): void {
 type ModalPropsLike = {
   visible?: boolean;
   signalFoxId?: string;
+  signalFoxDisplayName?: string;
   children?: unknown;
   onDismiss?: unknown;
   onRequestClose?: unknown;
@@ -35,11 +36,18 @@ function inferModalTargetFromProps(props: ModalPropsLike): string | null {
   return typeof props.signalFoxId === 'string' ? props.signalFoxId : null;
 }
 
+function inferModalDisplayNameFromProps(props: ModalPropsLike): string | null {
+  return typeof props.signalFoxDisplayName === 'string'
+    ? props.signalFoxDisplayName
+    : null;
+}
+
 function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   const prevVisibleRef = useRef<boolean | undefined>(undefined);
   const openEmittedRef = useRef<boolean>(false);
   const closeEmittedRef = useRef<boolean>(false);
   const latestTargetIdRef = useRef<string | null>(null);
+  const latestTargetDisplayNameRef = useRef<string | null>(null);
 
   const emitOpenOnce = (targetId: string | null, targetName: string | null) => {
     if (openEmittedRef.current) return;
@@ -54,8 +62,8 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     if (!track) return;
     track({
       type: 'modal_open',
-      target_id: targetId,
-      target_name: targetName,
+      signalFoxId: targetId,
+      ...(targetName ? { signalFoxDisplayName: targetName } : {}),
       target_type: 'modal',
       payload: {
         modalName: targetId,
@@ -83,8 +91,8 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     if (!track) return;
     track({
       type: 'modal_close',
-      target_id: targetId,
-      target_name: targetName,
+      signalFoxId: targetId,
+      ...(targetName ? { signalFoxDisplayName: targetName } : {}),
       target_type: 'modal',
       payload: {
         modalName: targetId,
@@ -97,8 +105,9 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   useLayoutEffect(() => {
     const visible = props.visible === true;
     const targetId = inferModalTargetFromProps(props);
-    const targetName = targetId;
+    const targetName = inferModalDisplayNameFromProps(props);
     latestTargetIdRef.current = targetId;
+    latestTargetDisplayNameRef.current = targetName;
     const prev = prevVisibleRef.current;
     const isFirstRender = prev === undefined;
     prevVisibleRef.current = visible;
@@ -121,12 +130,13 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
       const wasVisible = prevVisibleRef.current === true;
       if (!wasVisible) return;
       const targetId = latestTargetIdRef.current;
-      emitCloseOnce(targetId, targetId);
+      const targetName = latestTargetDisplayNameRef.current;
+      emitCloseOnce(targetId, targetName);
     };
   }, []);
 
   const targetId = inferModalTargetFromProps(props);
-  const targetName = targetId;
+  const targetName = inferModalDisplayNameFromProps(props);
   const originalOnShow = props.onShow;
   const originalOnDismiss = props.onDismiss;
 
