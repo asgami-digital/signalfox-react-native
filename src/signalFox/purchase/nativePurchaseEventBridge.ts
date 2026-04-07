@@ -299,6 +299,54 @@ export function notifyRestoreCompleted(
   activeCore.trackEvent(coreEvent as any);
 }
 
+export function notifyModalOpened(
+  targetId: string,
+  payloadExtras?: Record<string, unknown>
+): void {
+  if (!activeCore) return;
+
+  const trimmedTargetId =
+    typeof targetId === 'string' ? targetId.trim() : '';
+  if (!trimmedTargetId) return;
+
+  activeCore.trackEvent({
+    type: 'modal_open',
+    target_id: trimmedTargetId,
+    target_name: trimmedTargetId,
+    target_type: 'modal',
+    payload: {
+      modalName: trimmedTargetId,
+      source: 'react_native_modal',
+      kind: 'component_modal',
+      ...(payloadExtras ?? {}),
+    },
+  } as any);
+}
+
+export function notifyModalClosed(
+  targetId: string,
+  payloadExtras?: Record<string, unknown>
+): void {
+  if (!activeCore) return;
+
+  const trimmedTargetId =
+    typeof targetId === 'string' ? targetId.trim() : '';
+  if (!trimmedTargetId) return;
+
+  activeCore.trackEvent({
+    type: 'modal_close',
+    target_id: trimmedTargetId,
+    target_name: trimmedTargetId,
+    target_type: 'modal',
+    payload: {
+      modalName: trimmedTargetId,
+      source: 'react_native_modal',
+      kind: 'component_modal',
+      ...(payloadExtras ?? {}),
+    },
+  } as any);
+}
+
 /**
  * Hook utilitario (opcional): pide una reconciliación nativa de compras,
  * que típicamente se usa después de iniciar `restore`/sync.
