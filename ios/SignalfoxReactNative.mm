@@ -1,6 +1,25 @@
 #import "SignalfoxReactNative.h"
 #import <objc/message.h>
+#import <sys/sysctl.h>
 #import <UIKit/UIKit.h>
+
+static NSString *SignalfoxHardwareMachineString(void) {
+  size_t size = 0;
+  if (sysctlbyname("hw.machine", NULL, &size, NULL, 0) != 0 || size == 0) {
+    return nil;
+  }
+  char *buf = malloc(size);
+  if (buf == NULL) {
+    return nil;
+  }
+  if (sysctlbyname("hw.machine", buf, &size, NULL, 0) != 0) {
+    free(buf);
+    return nil;
+  }
+  NSString *machine = [NSString stringWithUTF8String:buf];
+  free(buf);
+  return machine.length > 0 ? machine : nil;
+}
 
 static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 
@@ -39,8 +58,9 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 - (void)getDeviceModel:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject
 {
-  NSString *model = [UIDevice currentDevice].model;
-  resolve(model ?: @"");
+  // hw.machine → identificador Apple (p. ej. iPhone16,1), no el genérico "iPhone" de UIDevice.model.
+  NSString *machine = SignalfoxHardwareMachineString();
+  resolve(machine ?: ([UIDevice currentDevice].model ?: @""));
 }
 
 - (void)getOsVersion:(RCTPromiseResolveBlock)resolve

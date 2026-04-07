@@ -106,46 +106,39 @@ function humanizeEventType(type: string): string {
 function buildGenericSignalFoxId(params: {
   family: EventFamily;
   screenName: string | null;
-  parentModal: string | null;
   eventType: string;
   explicitSignalFoxId: string | null;
   stepName: string | null;
-}): string {
+}): string | null {
   const {
     family,
     screenName,
-    parentModal,
     eventType,
     explicitSignalFoxId,
     stepName,
   } = params;
   console.log('buildGenericSignalFoxId', params);
+
+  if( explicitSignalFoxId && typeof explicitSignalFoxId === 'string' && explicitSignalFoxId.trim().length > 0) {
+    return explicitSignalFoxId.trim();
+  }
+
   if (family === EventFamily.Screen) {
     return trimOptionalString(screenName) ?? 'none';
   }
-  if (family === EventFamily.Lifecycle) {
+
+  if (family === EventFamily.Lifecycle || family === EventFamily.Purchase) {
     return trimOptionalString(eventType) ?? 'unknown';
   }
-  if (family === EventFamily.Flow) {
+
+  if (family === EventFamily.Flow ) {
     return (
-      trimOptionalString(explicitSignalFoxId) ??
       trimOptionalString(stepName) ??
       'unknown'
     );
   }
-  if (
-    family === EventFamily.Subview ||
-    family === EventFamily.Modal ||
-    family === EventFamily.Component
-  ) {
-    return explicitSignalFoxId ?? 'unknown';
-  }
-  return [
-    family,
-    trimOptionalString(screenName) ?? 'none',
-    trimOptionalString(parentModal) ?? 'none',
-    trimOptionalString(eventType) ?? 'unknown',
-  ].join('|');
+  
+  return null;
 }
 
 function buildGenericDisplayName(params: {
@@ -471,7 +464,6 @@ export class AnalyticsCore implements IAnalyticsCore {
         : buildGenericSignalFoxId({
             family,
             screenName: resolvedScreenName,
-            parentModal,
             eventType: event.type,
             explicitSignalFoxId,
             stepName: this.pickOptionalString(
