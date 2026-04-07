@@ -75,7 +75,8 @@ function buildGenericSignalFoxId(params: {
 }): string {
   const { family, screenName, parentModal, eventType, explicitSignalFoxId } =
     params;
-  if (eventType === EventFamily.Screen) {
+  console.log('buildGenericSignalFoxId', params);
+  if (family === EventFamily.Screen) {
     return screenName ?? 'none';
   }
   if (family === EventFamily.Lifecycle) {
