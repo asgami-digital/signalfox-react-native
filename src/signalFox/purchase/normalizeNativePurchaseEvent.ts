@@ -50,19 +50,19 @@ function buildPurchaseDisplayName(
 ): string {
   switch (eventName) {
     case 'purchase_started':
-      return 'Compra iniciada';
+      return 'Purchase started';
     case 'purchase_cancelled':
-      return 'Compra cancelada';
+      return 'Purchase cancelled';
     case 'purchase_failed':
-      return 'Compra fallida';
+      return 'Purchase failed';
     case 'purchase_completed':
-      return 'Compra completada';
+      return 'Purchase completed';
     case 'subscription_started':
-      return 'Suscripcion iniciada';
+      return 'Subscription started';
     case 'trial_started':
-      return 'Periodo de prueba iniciado';
+      return 'Trial started';
     case 'restore_completed':
-      return 'Restauracion de compras completada';
+      return 'Restore completed';
   }
 }
 

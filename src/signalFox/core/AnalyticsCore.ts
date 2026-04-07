@@ -89,6 +89,12 @@ function trimOptionalString(value: unknown): string | null {
     : null;
 }
 
+function nullIfEmptySignalFoxId(value: string | null): string | null {
+  if (value == null) return null;
+  const t = value.trim();
+  return t.length > 0 ? t : null;
+}
+
 function humanizeEventType(type: string): string {
   return type
     .split('_')
@@ -105,14 +111,27 @@ function buildGenericSignalFoxId(params: {
   explicitSignalFoxId: string | null;
   stepName: string | null;
 }): string {
-  const { family, screenName, parentModal, eventType, explicitSignalFoxId } =
-    params;
+  const {
+    family,
+    screenName,
+    parentModal,
+    eventType,
+    explicitSignalFoxId,
+    stepName,
+  } = params;
   console.log('buildGenericSignalFoxId', params);
   if (family === EventFamily.Screen) {
-    return screenName ?? 'none';
+    return trimOptionalString(screenName) ?? 'none';
   }
   if (family === EventFamily.Lifecycle) {
-    return eventType ?? 'unknown';
+    return trimOptionalString(eventType) ?? 'unknown';
+  }
+  if (family === EventFamily.Flow) {
+    return (
+      trimOptionalString(explicitSignalFoxId) ??
+      trimOptionalString(stepName) ??
+      'unknown'
+    );
   }
   if (
     family === EventFamily.Subview ||
@@ -123,9 +142,9 @@ function buildGenericSignalFoxId(params: {
   }
   return [
     family,
-    screenName ?? 'none',
-    parentModal ?? 'none',
-    eventType,
+    trimOptionalString(screenName) ?? 'none',
+    trimOptionalString(parentModal) ?? 'none',
+    trimOptionalString(eventType) ?? 'unknown',
   ].join('|');
 }
 
@@ -445,7 +464,7 @@ export class AnalyticsCore implements IAnalyticsCore {
       ) ??
       this.pickOptionalString((event as { target_name?: unknown }).target_name);
     const usesOnlyExplicitIdentifiers = usesExplicitUiIdentifiersOnly(event.type);
-    const signalFoxId =
+    const signalFoxIdComputed =
       explicitSignalFoxId ??
       (usesOnlyExplicitIdentifiers
         ? null
@@ -459,6 +478,7 @@ export class AnalyticsCore implements IAnalyticsCore {
               (event as { step_name?: unknown }).step_name
             ),
           }));
+    const signalFoxId = nullIfEmptySignalFoxId(signalFoxIdComputed);
     const signalFoxDisplayName =
       explicitSignalFoxDisplayName ??
       (usesOnlyExplicitIdentifiers

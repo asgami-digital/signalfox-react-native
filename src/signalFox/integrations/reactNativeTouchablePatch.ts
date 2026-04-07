@@ -39,9 +39,10 @@ function extractTextFromChildren(children: unknown): string | null {
 
 /** Solo signalFoxId */
 function inferTargetId(props: Record<string, unknown>): string | null {
-  return typeof (props as any).signalFoxId === 'string'
-    ? (props as any).signalFoxId
-    : null;
+  const v = (props as any).signalFoxId;
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
 }
 
 function inferTargetName(

@@ -31,7 +31,16 @@ function toIsoTimestamp(value: unknown): string | null {
 }
 
 function pickOptionalString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  if (typeof value !== 'string') return null;
+  const t = value.trim();
+  return t.length > 0 ? t : null;
+}
+
+/** Nunca enviar `signalFoxId` (ni `target_id` equivalente) como cadena vacía. */
+function signalFoxIdOrNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const t = value.trim();
+  return t.length > 0 ? t : null;
 }
 
 function pickPlatform(value: unknown): 'ios' | 'android' | 'web' | null {
@@ -272,6 +281,9 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
       break;
     }
   }
+
+  base.signalFoxId = signalFoxIdOrNull(base.signalFoxId);
+  base.target_id = signalFoxIdOrNull(base.target_id);
 
   return base;
 }

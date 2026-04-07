@@ -33,7 +33,9 @@ let OriginalModal: React.ComponentType<any>;
 
 /** Solo signalFoxId */
 function inferModalTargetFromProps(props: ModalPropsLike): string | null {
-  return typeof props.signalFoxId === 'string' ? props.signalFoxId : null;
+  if (typeof props.signalFoxId !== 'string') return null;
+  const t = props.signalFoxId.trim();
+  return t.length > 0 ? t : null;
 }
 
 function inferModalDisplayNameFromProps(props: ModalPropsLike): string | null {
@@ -105,7 +107,6 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   };
 
   useLayoutEffect(() => {
-    console.log('caca de vaca');
     const visible = props.visible === true;
     const targetId = inferModalTargetFromProps(props);
     const targetName = inferModalDisplayNameFromProps(props);
@@ -113,17 +114,22 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     latestTargetDisplayNameRef.current = targetName;
     const prev = prevVisibleRef.current;
     const isFirstRender = prev === undefined;
-    prevVisibleRef.current = visible;
 
     if (isFirstRender) {
+      if (visible) {
+        emitOpenOnce(targetId, targetName);
+      }
+      prevVisibleRef.current = visible;
       return;
     }
 
-    if (prev === false && visible) {
-      closeEmittedRef.current = false;
-    } else if (prev === true && !visible) {
+    if (!prev && visible) {
+      emitOpenOnce(targetId, targetName);
+    } else if (prev && !visible) {
       emitCloseOnce(targetId, targetName);
     }
+
+    prevVisibleRef.current = visible;
     // Solo reaccionamos a `visible`; el nombre se toma en cada transición desde props actuales.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [props.visible]);
