@@ -2,6 +2,7 @@ package com.asgami.signalfoxreactnative
 
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
+import android.os.Build
 import java.util.UUID
 
 class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
@@ -41,6 +42,22 @@ class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
       promise.resolve(anonymousId)
     } catch (error: Exception) {
       promise.reject("GET_ANONYMOUS_ID_ERROR", "Failed to get anonymous id", error)
+    }
+  }
+
+  override fun getDeviceModel(promise: Promise) {
+    try {
+      promise.resolve(Build.MODEL ?: "")
+    } catch (error: Exception) {
+      promise.reject("GET_DEVICE_MODEL_ERROR", "Failed to resolve device model", error)
+    }
+  }
+
+  override fun getOsVersion(promise: Promise) {
+    try {
+      promise.resolve(Build.VERSION.RELEASE ?: "")
+    } catch (error: Exception) {
+      promise.reject("GET_OS_VERSION_ERROR", "Failed to resolve OS version", error)
     }
   }
 

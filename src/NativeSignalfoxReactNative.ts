@@ -4,6 +4,8 @@ export interface Spec extends TurboModule {
   multiply(a: number, b: number): number;
   getAppVersion(): Promise<string>;
   getAnonymousId(): Promise<string>;
+  getDeviceModel(): Promise<string>;
+  getOsVersion(): Promise<string>;
 
   /**
    * Inicia listeners nativos de compras y activa la emisión de eventos hacia JS.

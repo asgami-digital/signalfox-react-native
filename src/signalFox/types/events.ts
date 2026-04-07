@@ -31,6 +31,8 @@ export interface BaseAnalyticsEvent {
   anonymous_id: string;
   platform: 'ios' | 'android';
   app_version?: string;
+  device_model?: string | null;
+  os_version?: string | null;
   signalFoxId?: string | null;
   signalFoxDisplayName?: string | null;
 }

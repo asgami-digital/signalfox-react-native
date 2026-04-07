@@ -1,5 +1,6 @@
 #import "SignalfoxReactNative.h"
 #import <objc/message.h>
+#import <UIKit/UIKit.h>
 
 static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 
@@ -33,6 +34,20 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
     [defaults synchronize];
   }
   resolve(anonymousId);
+}
+
+- (void)getDeviceModel:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject
+{
+  NSString *model = [UIDevice currentDevice].model;
+  resolve(model ?: @"");
+}
+
+- (void)getOsVersion:(RCTPromiseResolveBlock)resolve
+             reject:(RCTPromiseRejectBlock)reject
+{
+  NSString *version = [UIDevice currentDevice].systemVersion;
+  resolve(version ?: @"");
 }
 
 // MARK: - Native purchase analytics bridge

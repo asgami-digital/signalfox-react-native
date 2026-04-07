@@ -36,6 +36,10 @@ function generateId(): string {
 
 let cachedNativeAppVersion: string | null = null;
 let nativeAppVersionPromise: Promise<string | null> | null = null;
+let cachedNativeDeviceModel: string | null = null;
+let nativeDeviceModelPromise: Promise<string | null> | null = null;
+let cachedNativeOsVersion: string | null = null;
+let nativeOsVersionPromise: Promise<string | null> | null = null;
 
 async function getNativeAppVersion(): Promise<string | null> {
   if (cachedNativeAppVersion) return cachedNativeAppVersion;
@@ -49,6 +53,34 @@ async function getNativeAppVersion(): Promise<string | null> {
       .catch(() => null);
   }
   return nativeAppVersionPromise;
+}
+
+async function getNativeDeviceModel(): Promise<string | null> {
+  if (cachedNativeDeviceModel) return cachedNativeDeviceModel;
+  if (!nativeDeviceModelPromise) {
+    nativeDeviceModelPromise = SignalfoxReactNative.getDeviceModel()
+      .then((value) => {
+        const model = typeof value === 'string' ? value.trim() : '';
+        cachedNativeDeviceModel = model.length > 0 ? model : null;
+        return cachedNativeDeviceModel;
+      })
+      .catch(() => null);
+  }
+  return nativeDeviceModelPromise;
+}
+
+async function getNativeOsVersion(): Promise<string | null> {
+  if (cachedNativeOsVersion) return cachedNativeOsVersion;
+  if (!nativeOsVersionPromise) {
+    nativeOsVersionPromise = SignalfoxReactNative.getOsVersion()
+      .then((value) => {
+        const version = typeof value === 'string' ? value.trim() : '';
+        cachedNativeOsVersion = version.length > 0 ? version : null;
+        return cachedNativeOsVersion;
+      })
+      .catch(() => null);
+  }
+  return nativeOsVersionPromise;
 }
 
 function trimOptionalString(value: unknown): string | null {
@@ -158,6 +190,8 @@ type QueuedEvent = AnalyticsEvent;
 export class AnalyticsCore implements IAnalyticsCore {
   private readonly apiKey: string;
   private appVersion: string;
+  private deviceModel: string | null = null;
+  private osVersion: string | null = null;
   private readonly batchSize: number;
   private readonly flushIntervalMs: number;
   private readonly logOnly: boolean;
@@ -221,6 +255,27 @@ export class AnalyticsCore implements IAnalyticsCore {
         '[AUTO_ANALYTICS] Failed to read native anonymousId. Using memory fallback.',
         error
       );
+    }
+
+    try {
+      const nativeDeviceModel = await getNativeDeviceModel();
+      if (nativeDeviceModel) {
+        this.deviceModel = nativeDeviceModel;
+      }
+    } catch (error) {
+      console.warn(
+        '[AUTO_ANALYTICS] Failed to read native device model.',
+        error
+      );
+    }
+
+    try {
+      const nativeOsVersion = await getNativeOsVersion();
+      if (nativeOsVersion) {
+        this.osVersion = nativeOsVersion;
+      }
+    } catch (error) {
+      console.warn('[AUTO_ANALYTICS] Failed to read native os version.', error);
     }
   }
 
@@ -426,6 +481,8 @@ export class AnalyticsCore implements IAnalyticsCore {
       anonymous_id: this.anonymousId,
       platform: Platform.OS as 'ios' | 'android',
       app_version: this.appVersion,
+      device_model: this.deviceModel,
+      os_version: this.osVersion,
       signalFoxId,
       signalFoxDisplayName,
       ...(resolvedScreenName ? { screen_name: resolvedScreenName } : {}),
