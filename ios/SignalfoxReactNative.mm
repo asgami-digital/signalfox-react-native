@@ -8,7 +8,7 @@ static NSString *SignalfoxHardwareMachineString(void) {
   if (sysctlbyname("hw.machine", NULL, &size, NULL, 0) != 0 || size == 0) {
     return nil;
   }
-  char *buf = malloc(size);
+  char *buf = (char *)malloc(size);
   if (buf == NULL) {
     return nil;
   }
