@@ -19,6 +19,17 @@ type TrackableCore = {
   trackEvent: jest.Mock;
 };
 
+function getRenderedModalNode(
+  tree: ReactTestRenderer,
+  signalFoxId: string
+): { props: { onShow?: () => void } } {
+  return tree.root
+    .findAllByProps({ signalFoxId })
+    .find((node) => typeof node.props.onShow === 'function') as {
+    props: { onShow?: () => void };
+  };
+}
+
 function setupPatchedModal() {
   const reactNative = require('react-native') as {
     Modal: jest.Mock;
@@ -66,7 +77,7 @@ describe('reactNativeModalPatch', () => {
     expect(getActiveModalId()).toBeNull();
 
     act(() => {
-      tree.root.findByType('mock-modal').props.onShow();
+      getRenderedModalNode(tree, 'rating-modal').props.onShow?.();
     });
 
     expect(trackEvent).toHaveBeenCalledTimes(1);
@@ -108,7 +119,7 @@ describe('reactNativeModalPatch', () => {
     });
 
     act(() => {
-      tree.root.findByType('mock-modal').props.onShow();
+      getRenderedModalNode(tree, 'result-modal').props.onShow?.();
     });
 
     act(() => {
