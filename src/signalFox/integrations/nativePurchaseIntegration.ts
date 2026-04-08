@@ -5,6 +5,7 @@ import {
   stopListeningToNativePurchaseEvents,
 } from '../purchase/nativePurchaseEventBridge';
 import {
+  isRevenueCatPurchasesAvailable,
   startRevenueCatPurchaseAnalyticsIfAvailable,
   stopRevenueCatPurchaseAnalyticsIfAvailable,
 } from '../purchase/revenueCatPurchaseAnalytics';
@@ -25,7 +26,10 @@ export function nativePurchaseIntegration(): AnalyticsIntegration {
       console.log(
         '[SignalfoxPurchaseAnalyticsBridge][TS] nativePurchaseIntegration.setup()'
       );
-      startListeningToNativePurchaseEvents(core);
+      const hasRevenueCatPurchases = isRevenueCatPurchasesAvailable();
+      startListeningToNativePurchaseEvents(core, {
+        enableNativePurchaseEvents: !hasRevenueCatPurchases,
+      });
       startRevenueCatPurchaseAnalyticsIfAvailable();
 
       // En algunos apps conviene disparar reconciliación tras conectar.

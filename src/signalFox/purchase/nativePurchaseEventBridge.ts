@@ -13,6 +13,7 @@ export const NATIVE_PURCHASE_EVENT_CHANNEL = 'signalfox_purchase_event';
 let activeCore: IAnalyticsCore | null = null;
 let refCount = 0;
 let subscription: { remove: () => void } | null = null;
+let nativePurchaseListenerEnabled = true;
 const lastEventSeenAtMs = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 3000;
 
@@ -118,10 +119,15 @@ function toCoreTrackEvent(
  * Se suscribe a eventos nativos de compra y los enruta al pipeline del core.
  */
 export function startListeningToNativePurchaseEvents(
-  core: IAnalyticsCore
+  core: IAnalyticsCore,
+  options?: { enableNativePurchaseEvents?: boolean }
 ): void {
+  const enableNativePurchaseEvents =
+    options?.enableNativePurchaseEvents !== false;
+
   if (refCount === 0) {
     activeCore = core;
+    nativePurchaseListenerEnabled = enableNativePurchaseEvents;
   }
 
   refCount += 1;
@@ -129,8 +135,13 @@ export function startListeningToNativePurchaseEvents(
 
   debugLog('startListeningToNativePurchaseEvents', {
     refCount,
+    nativePurchaseListenerEnabled,
     platform: core ? 'hasCore' : 'noCore',
   });
+
+  if (!nativePurchaseListenerEnabled) {
+    return;
+  }
 
   // Suscripción antes de iniciar nativo para evitar race condition.
   const emitterModule = NativeModules.SignalfoxPurchaseEventEmitter;
@@ -212,6 +223,7 @@ export function stopListeningToNativePurchaseEvents(): void {
   lastEventSeenAtMs.clear();
   activeCore = null;
   pendingPurchaseProductId = null;
+  nativePurchaseListenerEnabled = true;
 
   SignalfoxReactNative.stopNativePurchaseAnalytics().catch(() => {
     // ignore
@@ -279,6 +291,23 @@ export function notifyPurchaseFailed(
   if (!coreEvent) return;
   activeCore.trackEvent(coreEvent as any);
   clearPendingPurchaseProductId('notifyPurchaseFailed');
+}
+
+export function notifyPurchaseCompleted(
+  payload?: Omit<NativePurchaseEventPayload, 'eventName'>
+): void {
+  if (!activeCore) return;
+
+  const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
+    ...(payload as any),
+    eventName: 'purchase_completed',
+    platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: payload?.store ?? defaultStoreForPlatform(),
+  });
+  const coreEvent = toCoreTrackEvent(normalized);
+  if (!coreEvent) return;
+  activeCore.trackEvent(coreEvent as any);
+  clearPendingPurchaseProductId('notifyPurchaseCompleted');
 }
 
 /**

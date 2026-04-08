@@ -4,7 +4,10 @@ import {
   notifyModalClosed,
   notifyModalOpened,
   notifyPurchaseCancelled,
+  notifyPurchaseCompleted,
+  notifyPurchaseFailed,
   notifyPurchaseStarted,
+  notifyRestoreCompleted,
 } from './nativePurchaseEventBridge';
 
 /**
@@ -78,6 +81,11 @@ const PATCHABLE_METHODS = [
   'purchaseDiscountedPackage',
 ] as const;
 
+const RESTORE_PATCHABLE_METHODS = [
+  'restorePurchases',
+  'restoreTransactions',
+] as const;
+
 function purchaseProductIdFromArgs(
   method: (typeof PATCHABLE_METHODS)[number],
   args: unknown[]
@@ -135,6 +143,70 @@ function isRevenueCatUserCancellation(err: unknown, Purchases: any): boolean {
   return false;
 }
 
+function pickString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  return value as Record<string, unknown>;
+}
+
+function extractCustomerInfo(result: unknown): Record<string, unknown> | null {
+  const obj = asRecord(result);
+  if (!obj) return null;
+  const direct = asRecord(obj.customerInfo);
+  if (direct) return direct;
+  return obj;
+}
+
+function inferProductIdFromResult(
+  result: unknown,
+  fallbackProductId?: string
+): string | undefined {
+  const obj = asRecord(result);
+  if (!obj) return fallbackProductId;
+  return pickString(
+    obj.productIdentifier,
+    obj.productId,
+    asRecord(obj.storeProduct)?.identifier,
+    asRecord(obj.storeProduct)?.productIdentifier,
+    asRecord(obj.product)?.identifier,
+    asRecord(obj.transaction)?.productIdentifier,
+    fallbackProductId
+  );
+}
+
+function inferRestoreProductIds(result: unknown): string[] | undefined {
+  const info = extractCustomerInfo(result);
+  if (!info) return undefined;
+
+  const candidateArrays: unknown[] = [
+    info.activeSubscriptions,
+    info.allPurchasedProductIdentifiers,
+    info.nonSubscriptionTransactions,
+  ];
+  for (const candidate of candidateArrays) {
+    if (!Array.isArray(candidate)) continue;
+    const ids = candidate
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        const rec = asRecord(item);
+        return pickString(rec?.productIdentifier, rec?.productId);
+      })
+      .filter((item): item is string => !!item);
+    if (ids.length > 0) {
+      return Array.from(new Set(ids));
+    }
+  }
+  return undefined;
+}
+
 function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
   const originals = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 
@@ -159,7 +231,14 @@ function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
       } as any);
 
       return boundOriginal(...args).then(
-        (result) => result,
+        (result) => {
+          notifyPurchaseCompleted({
+            productId: inferProductIdFromResult(result, productId),
+            platform,
+            store,
+          } as any);
+          return result;
+        },
         (err: unknown) => {
           if (isRevenueCatUserCancellation(err, Purchases)) {
             notifyPurchaseCancelled({
@@ -167,7 +246,42 @@ function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
               platform,
               store,
             } as any);
+          } else {
+            const error = asRecord(err);
+            notifyPurchaseFailed({
+              productId,
+              platform,
+              store,
+              errorCode: pickString(error?.readableErrorCode, error?.code),
+              errorMessage: pickString(error?.message, error?.description),
+            } as any);
           }
+          throw err;
+        }
+      );
+    };
+  }
+
+  for (const name of RESTORE_PATCHABLE_METHODS) {
+    const original = Purchases[name];
+    if (typeof original !== 'function') continue;
+
+    const boundOriginal = original.bind(Purchases) as (
+      ...args: unknown[]
+    ) => Promise<unknown>;
+    originals.set(name, boundOriginal);
+
+    Purchases[name] = (...args: unknown[]) => {
+      return boundOriginal(...args).then(
+        (result) => {
+          notifyRestoreCompleted({
+            platform,
+            store,
+            restoredProductIds: inferRestoreProductIds(result),
+          } as any);
+          return result;
+        },
+        (err: unknown) => {
           throw err;
         }
       );
@@ -275,7 +389,7 @@ let rcHookRefCount = 0;
 let rcTeardown: (() => void) | null = null;
 
 /**
- * Parchea métodos estáticos de `Purchases` para `purchase_started` / `purchase_cancelled`.
+ * Parchea métodos estáticos de `Purchases` para eventos de compra y restore.
  * Debe llamarse después de `startListeningToNativePurchaseEvents` para que exista `activeCore`.
  */
 export function startRevenueCatPurchaseAnalyticsIfAvailable(): void {
@@ -284,7 +398,7 @@ export function startRevenueCatPurchaseAnalyticsIfAvailable(): void {
     const RevenueCatUI = tryLoadRevenueCatUI();
     const teardowns: Array<() => void> = [];
 
-    if (Purchases && typeof Purchases === 'function') {
+    if (Purchases && (typeof Purchases === 'function' || typeof Purchases === 'object')) {
       const purchaseTeardown = installRevenueCatPurchaseHooks(Purchases);
       if (purchaseTeardown) {
         teardowns.push(purchaseTeardown);
@@ -311,6 +425,11 @@ export function startRevenueCatPurchaseAnalyticsIfAvailable(): void {
     }
   }
   rcHookRefCount += 1;
+}
+
+export function isRevenueCatPurchasesAvailable(): boolean {
+  const Purchases = tryLoadPurchases();
+  return !!Purchases && (typeof Purchases === 'function' || typeof Purchases === 'object');
 }
 
 export function stopRevenueCatPurchaseAnalyticsIfAvailable(): void {
