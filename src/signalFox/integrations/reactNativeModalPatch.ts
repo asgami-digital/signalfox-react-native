@@ -194,7 +194,7 @@ export function reactNativeModalPatchIntegration(): AnalyticsIntegration {
   return {
     name: 'reactNativeModalPatch',
 
-    setup(core: IAnalyticsCore) {
+    setup(core: IAnalyticsCore, _context) {
       setModalPatchTrack((e) =>
         core.trackEvent(
           e as { type: AnalyticsEventType } & Record<string, unknown>

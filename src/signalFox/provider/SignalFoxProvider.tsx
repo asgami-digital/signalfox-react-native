@@ -94,8 +94,9 @@ export function SignalFoxProvider({
               nativePurchaseIntegration(),
               reactNativeModalPatchIntegration(),
             ];
+      const setupContext = { allIntegrations: list } as const;
       cleanupRef.current = list.map((integration) =>
-        integration.setup(instance)
+        integration.setup(instance, setupContext)
       );
     };
 

@@ -33,7 +33,15 @@ export interface IAnalyticsCore {
   setNavigationIntentTimeoutListener?(listener: (() => void) | null): void;
 }
 
+/** Contexto opcional pasado por `SignalFoxProvider` al montar integraciones. */
+export interface AnalyticsIntegrationSetupContext {
+  allIntegrations: ReadonlyArray<AnalyticsIntegration>;
+}
+
 export interface AnalyticsIntegration {
   name: string;
-  setup(core: IAnalyticsCore): () => void;
+  setup(
+    core: IAnalyticsCore,
+    context?: AnalyticsIntegrationSetupContext
+  ): () => void;
 }

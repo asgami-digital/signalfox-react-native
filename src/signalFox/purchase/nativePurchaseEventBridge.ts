@@ -116,14 +116,18 @@ function toCoreTrackEvent(
 }
 
 /**
- * Se suscribe a eventos nativos de compra y los enruta al pipeline del core.
+ * Registra el `core` para `notifyPurchase*` (bridge JS).
+ *
+ * Por defecto **no** suscribe al `NativeEventEmitter` ni llama a `startNativePurchaseAnalytics`:
+ * los eventos que emite el módulo nativo de compras quedan ignorados en JS salvo que pases
+ * `{ enableNativePurchaseEvents: true }` (casos avanzados).
  */
 export function startListeningToNativePurchaseEvents(
   core: IAnalyticsCore,
   options?: { enableNativePurchaseEvents?: boolean }
 ): void {
   const enableNativePurchaseEvents =
-    options?.enableNativePurchaseEvents !== false;
+    options?.enableNativePurchaseEvents === true;
 
   if (refCount === 0) {
     activeCore = core;

@@ -13,4 +13,8 @@ export type {
   ModalEventPayload,
   ScreenViewEvent,
 } from './events';
-export type { AnalyticsIntegration, IAnalyticsCore } from './integration';
+export type {
+  AnalyticsIntegration,
+  AnalyticsIntegrationSetupContext,
+  IAnalyticsCore,
+} from './integration';

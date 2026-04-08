@@ -9,3 +9,8 @@ export {
 } from './reactNativeTouchablePatch';
 export { reactNavigationIntegration } from './reactNavigationIntegration';
 export { nativePurchaseIntegration } from './nativePurchaseIntegration';
+export {
+  revenueCatIntegration,
+  REVENUECAT_ANALYTICS_INTEGRATION_NAME,
+} from './revenueCatIntegration';
+export type { RevenueCatIntegrationOptions } from './revenueCatIntegration';

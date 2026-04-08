@@ -296,7 +296,7 @@ export function reactNavigationIntegration(
   return {
     name: 'reactNavigation',
 
-    setup(core: IAnalyticsCore): () => void {
+    setup(core: IAnalyticsCore, _context): () => void {
       let previousScreenName: string | undefined;
       let lastActiveBranchKey: string | null = null;
       let pendingNavigationTimestamp: number | null = null;

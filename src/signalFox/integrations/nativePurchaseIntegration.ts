@@ -4,33 +4,25 @@ import {
   startListeningToNativePurchaseEvents,
   stopListeningToNativePurchaseEvents,
 } from '../purchase/nativePurchaseEventBridge';
-import {
-  isRevenueCatPurchasesAvailable,
-  startRevenueCatPurchaseAnalyticsIfAvailable,
-  stopRevenueCatPurchaseAnalyticsIfAvailable,
-} from '../purchase/revenueCatPurchaseAnalytics';
 
 /**
- * Conecta eventos nativos de compra (StoreKit / Billing) → TypeScript → core analytics.
+ * Registra el bridge JS de compras (`notifyPurchase*`, RevenueCat, etc.) con el core.
  *
- * `purchase_started` y `purchase_cancelled` se obtienen vía `react-native-purchases` si está
- * instalado (parche de métodos de compra). `restore_completed` puede requerir hooks TS.
+ * No escucha el canal nativo de compras: los eventos StoreKit/Billing que envía iOS/Android
+ * no se consumen en JS (ver `startListeningToNativePurchaseEvents` con
+ * `enableNativePurchaseEvents: true` si lo necesitas).
  */
 export function nativePurchaseIntegration(): AnalyticsIntegration {
   return {
     name: 'nativePurchaseAnalytics',
 
-    setup(core) {
+    setup(core, _context) {
       // Logs no condicionados a __DEV__ para depurar problemas de inicialización.
       // (Si no ves estos logs al hacer una compra/restore, la integración no está montada en tu app.)
       console.log(
         '[SignalfoxPurchaseAnalyticsBridge][TS] nativePurchaseIntegration.setup()'
       );
-      const hasRevenueCatPurchases = isRevenueCatPurchasesAvailable();
-      startListeningToNativePurchaseEvents(core, {
-        enableNativePurchaseEvents: !hasRevenueCatPurchases,
-      });
-      startRevenueCatPurchaseAnalyticsIfAvailable();
+      startListeningToNativePurchaseEvents(core);
 
       // En algunos apps conviene disparar reconciliación tras conectar.
       // Degradamos silenciosamente si el nativo no está disponible.
@@ -39,7 +31,6 @@ export function nativePurchaseIntegration(): AnalyticsIntegration {
       });
 
       return () => {
-        stopRevenueCatPurchaseAnalyticsIfAvailable();
         stopListeningToNativePurchaseEvents();
       };
     },

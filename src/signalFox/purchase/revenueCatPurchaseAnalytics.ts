@@ -10,28 +10,6 @@ import {
   notifyRestoreCompleted,
 } from './nativePurchaseEventBridge';
 
-/**
- * Carga opcional de RevenueCat. Si no está instalado en la app host, Metro puede fallar al
- * resolver el módulo; en ese caso instala `react-native-purchases` o aliasa el módulo.
- */
-function tryLoadPurchases(): any {
-  try {
-    const mod = require('react-native-purchases');
-    return mod?.default ?? mod ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function tryLoadRevenueCatUI(): any {
-  try {
-    const mod = require('react-native-purchases-ui');
-    return mod?.default ?? mod ?? null;
-  } catch {
-    return null;
-  }
-}
-
 const REVENUECAT_PAYWALL_MODAL_NAME = 'RevenueCat Paywall';
 const PAYWALL_PATCHABLE_METHODS = [
   'presentPaywall',
@@ -152,6 +130,101 @@ function pickString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function pickFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * `PurchasesStoreProduct`, objeto `Price` de fases de suscripción (amountMicros), o campos legacy Android.
+ */
+function extractPriceCurrencyFromProductLike(
+  raw: unknown
+): { price?: number; currency?: string } {
+  const o = asRecord(raw);
+  if (!o) return {};
+
+  if (
+    typeof o.amountMicros === 'number' &&
+    Number.isFinite(o.amountMicros)
+  ) {
+    const currency = pickString(o.currencyCode);
+    return {
+      price: o.amountMicros / 1_000_000,
+      ...(currency ? { currency } : {}),
+    };
+  }
+
+  const micros = pickFiniteNumber(o.priceAmountMicros);
+  const fromMicros =
+    micros != null ? micros / 1_000_000 : undefined;
+
+  const price = pickFiniteNumber(o.price) ?? fromMicros;
+  const currency = pickString(
+    o.currencyCode,
+    o.currency,
+    o.priceCurrencyCode
+  );
+
+  const out: { price?: number; currency?: string } = {};
+  if (price != null && Number.isFinite(price)) out.price = price;
+  if (currency) out.currency = currency;
+  return out;
+}
+
+function inferPriceCurrencyFromPurchaseContext(
+  result: unknown,
+  method: (typeof PATCHABLE_METHODS)[number],
+  args: unknown[]
+): { price?: number; currency?: string } {
+  const fromResult = (): { price?: number; currency?: string } => {
+    const r = asRecord(result);
+    if (!r) return {};
+    for (const raw of [
+      r.storeProduct,
+      r.product,
+      r.transaction,
+      r.storeTransaction,
+    ]) {
+      const x = extractPriceCurrencyFromProductLike(raw);
+      if (x.price != null || x.currency) return x;
+    }
+    return {};
+  };
+
+  const fromArgs = (): { price?: number; currency?: string } => {
+    const a0 = args[0];
+    if (method === 'purchasePackage' || method === 'purchaseDiscountedPackage') {
+      const pkg = asRecord(a0);
+      return extractPriceCurrencyFromProductLike(
+        pkg?.product ?? pkg?.storeProduct
+      );
+    }
+    if (
+      method === 'purchaseStoreProduct' ||
+      method === 'purchaseDiscountedProduct'
+    ) {
+      return extractPriceCurrencyFromProductLike(a0);
+    }
+    if (method === 'purchaseSubscriptionOption') {
+      const opt = asRecord(a0);
+      const phases = opt?.pricingPhases;
+      if (Array.isArray(phases)) {
+        for (const ph of phases) {
+          const phase = asRecord(ph);
+          const x = extractPriceCurrencyFromProductLike(phase?.price);
+          if (x.price != null || x.currency) return x;
+        }
+      }
+      return extractPriceCurrencyFromProductLike(opt);
+    }
+    return {};
+  };
+
+  const r = fromResult();
+  if (r.price != null || r.currency) return r;
+  return fromArgs();
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object') return null;
   return value as Record<string, unknown>;
@@ -232,10 +305,17 @@ function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
 
       return boundOriginal(...args).then(
         (result) => {
+          const { price, currency } = inferPriceCurrencyFromPurchaseContext(
+            result,
+            name,
+            args
+          );
           notifyPurchaseCompleted({
             productId: inferProductIdFromResult(result, productId),
             platform,
             store,
+            ...(price != null && Number.isFinite(price) ? { price } : {}),
+            ...(currency ? { currency } : {}),
           } as any);
           return result;
         },
@@ -388,32 +468,53 @@ function installRevenueCatPaywallHooks(
 let rcHookRefCount = 0;
 let rcTeardown: (() => void) | null = null;
 
+export type StartRevenueCatPurchaseAnalyticsOptions = {
+  purchases: unknown;
+  revenueCatUI?: unknown;
+};
+
+function isPurchasesModule(value: unknown): value is Record<string, unknown> {
+  return (
+    value != null &&
+    (typeof value === 'object' || typeof value === 'function')
+  );
+}
+
 /**
- * Parchea métodos estáticos de `Purchases` para eventos de compra y restore.
+ * Parchea métodos de `Purchases` (y opcionalmente `RevenueCatUI`) usando referencias inyectadas.
  * Debe llamarse después de `startListeningToNativePurchaseEvents` para que exista `activeCore`.
  */
-export function startRevenueCatPurchaseAnalyticsIfAvailable(): void {
+export function startRevenueCatPurchaseAnalytics(
+  options: StartRevenueCatPurchaseAnalyticsOptions
+): void {
   if (rcHookRefCount === 0) {
-    const Purchases = tryLoadPurchases();
-    const RevenueCatUI = tryLoadRevenueCatUI();
     const teardowns: Array<() => void> = [];
 
-    if (Purchases && (typeof Purchases === 'function' || typeof Purchases === 'object')) {
-      const purchaseTeardown = installRevenueCatPurchaseHooks(Purchases);
+    if (isPurchasesModule(options.purchases)) {
+      const purchaseTeardown = installRevenueCatPurchaseHooks(
+        options.purchases as any
+      );
       if (purchaseTeardown) {
         teardowns.push(purchaseTeardown);
         console.log(
           '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de compra activados'
         );
       }
+    } else {
+      console.warn(
+        '[SignalFox] revenueCatIntegration: `purchases` no es un módulo válido; se omiten hooks de compra'
+      );
     }
 
-    const paywallTeardown = installRevenueCatPaywallHooks(RevenueCatUI);
-    if (paywallTeardown) {
-      teardowns.push(paywallTeardown);
-      console.log(
-        '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de paywall activados'
-      );
+    const RevenueCatUI = options.revenueCatUI;
+    if (RevenueCatUI != null && typeof RevenueCatUI === 'function') {
+      const paywallTeardown = installRevenueCatPaywallHooks(RevenueCatUI);
+      if (paywallTeardown) {
+        teardowns.push(paywallTeardown);
+        console.log(
+          '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de paywall activados'
+        );
+      }
     }
 
     if (teardowns.length > 0) {
@@ -425,11 +526,6 @@ export function startRevenueCatPurchaseAnalyticsIfAvailable(): void {
     }
   }
   rcHookRefCount += 1;
-}
-
-export function isRevenueCatPurchasesAvailable(): boolean {
-  const Purchases = tryLoadPurchases();
-  return !!Purchases && (typeof Purchases === 'function' || typeof Purchases === 'object');
 }
 
 export function stopRevenueCatPurchaseAnalyticsIfAvailable(): void {

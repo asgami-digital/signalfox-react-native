@@ -150,7 +150,7 @@ export function applyTouchablePatch(): void {
 export function reactNativeTouchablePatchIntegration(): AnalyticsIntegration {
   return {
     name: 'reactNativeTouchablePatch',
-    setup(core: IAnalyticsCore) {
+    setup(core: IAnalyticsCore, _context) {
       setTouchableTrack((e) =>
         core.trackEvent(
           e as { type: AnalyticsEventType } & Record<string, unknown>

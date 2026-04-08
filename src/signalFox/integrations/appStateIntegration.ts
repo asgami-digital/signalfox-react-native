@@ -50,7 +50,7 @@ export function appStateIntegration(): AnalyticsIntegration {
   return {
     name: 'appState',
 
-    setup(core) {
+    setup(core, _context) {
       let previousState =
         (AppState.currentState as AppStateStatus) ??
         ('active' as AppStateStatus);

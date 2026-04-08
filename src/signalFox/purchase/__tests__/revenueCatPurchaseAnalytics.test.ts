@@ -43,35 +43,17 @@ describe('revenueCatPurchaseAnalytics', () => {
       }),
       { virtual: false }
     );
-    jest.doMock(
-      'react-native-purchases',
-      () => ({
-        __esModule: true,
-        default: function Purchases() {},
-      }),
-      { virtual: true }
-    );
-    jest.doMock(
-      'react-native-purchases-ui',
-      () => {
-        class RevenueCatUI {}
-        (RevenueCatUI as any).presentPaywall = presentPaywall;
-        return {
-          __esModule: true,
-          default: RevenueCatUI,
-        };
-      },
-      { virtual: true }
-    );
+
+    class RevenueCatUI {}
+    (RevenueCatUI as any).presentPaywall = presentPaywall;
 
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
-    analyticsModule.startRevenueCatPurchaseAnalyticsIfAvailable();
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: {},
+      revenueCatUI: RevenueCatUI,
+    });
 
-    const RevenueCatUI = require('react-native-purchases-ui').default as {
-      presentPaywall: () => Promise<unknown>;
-    };
-
-    await RevenueCatUI.presentPaywall();
+    await (RevenueCatUI as any).presentPaywall();
 
     expect(notifyModalOpened).toHaveBeenCalledWith(
       'RevenueCat Paywall',
@@ -116,34 +98,17 @@ describe('revenueCatPurchaseAnalytics', () => {
       }),
       { virtual: false }
     );
-    jest.doMock(
-      'react-native-purchases',
-      () => ({
-        __esModule: true,
-        default: function Purchases() {},
-      }),
-      { virtual: true }
-    );
-    jest.doMock(
-      'react-native-purchases-ui',
-      () => {
-        class RevenueCatUI {}
-        (RevenueCatUI as any).Paywall = (props: Record<string, unknown>) =>
-          React.createElement('rc-paywall', props);
-        return {
-          __esModule: true,
-          default: RevenueCatUI,
-        };
-      },
-      { virtual: true }
-    );
+
+    class RevenueCatUI {}
+    (RevenueCatUI as any).Paywall = (props: Record<string, unknown>) =>
+      React.createElement('rc-paywall', props);
 
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
-    analyticsModule.startRevenueCatPurchaseAnalyticsIfAvailable();
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: {},
+      revenueCatUI: RevenueCatUI,
+    });
 
-    const RevenueCatUI = require('react-native-purchases-ui').default as {
-      Paywall: React.ComponentType<Record<string, unknown>>;
-    };
     let tree!: ReactTestRenderer;
 
     act(() => {
@@ -186,7 +151,11 @@ describe('revenueCatPurchaseAnalytics', () => {
     const notifyRestoreCompleted = jest.fn();
     const purchaseProduct = jest.fn(() =>
       Promise.resolve({
-        storeProduct: { identifier: 'pro_monthly' },
+        storeProduct: {
+          identifier: 'pro_monthly',
+          price: 7.99,
+          currencyCode: 'USD',
+        },
       })
     );
 
@@ -206,31 +175,13 @@ describe('revenueCatPurchaseAnalytics', () => {
       }),
       { virtual: false }
     );
-    jest.doMock(
-      'react-native-purchases',
-      () => ({
-        __esModule: true,
-        default: {
-          purchaseProduct,
-        },
-      }),
-      { virtual: true }
-    );
-    jest.doMock(
-      'react-native-purchases-ui',
-      () => ({
-        __esModule: true,
-        default: function RevenueCatUI() {},
-      }),
-      { virtual: true }
-    );
+
+    const Purchases = { purchaseProduct };
 
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
-    analyticsModule.startRevenueCatPurchaseAnalyticsIfAvailable();
-
-    const Purchases = require('react-native-purchases').default as {
-      purchaseProduct: (productId: string) => Promise<unknown>;
-    };
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: Purchases,
+    });
 
     await Purchases.purchaseProduct('pro_monthly');
 
@@ -246,10 +197,70 @@ describe('revenueCatPurchaseAnalytics', () => {
         productId: 'pro_monthly',
         platform: 'ios',
         store: 'app_store',
+        price: 7.99,
+        currency: 'USD',
       })
     );
     expect(notifyPurchaseCancelled).not.toHaveBeenCalled();
     expect(notifyPurchaseFailed).not.toHaveBeenCalled();
+
+    analyticsModule.stopRevenueCatPurchaseAnalyticsIfAvailable();
+  });
+
+  it('rellena price/currency desde el Package en args si el resultado no incluye StoreProduct', async () => {
+    const notifyModalOpened = jest.fn();
+    const notifyModalClosed = jest.fn();
+    const notifyPurchaseStarted = jest.fn();
+    const notifyPurchaseCancelled = jest.fn();
+    const notifyPurchaseCompleted = jest.fn();
+    const notifyPurchaseFailed = jest.fn();
+    const notifyRestoreCompleted = jest.fn();
+
+    const purchasePackage = jest.fn(() =>
+      Promise.resolve({
+        productIdentifier: 'annual',
+        customerInfo: {},
+        transaction: { productIdentifier: 'annual' },
+      })
+    );
+
+    jest.doMock('react-native', () => ({
+      Platform: { OS: 'ios' },
+    }));
+    jest.doMock(
+      '../nativePurchaseEventBridge',
+      () => ({
+        notifyModalClosed,
+        notifyModalOpened,
+        notifyPurchaseStarted,
+        notifyPurchaseCancelled,
+        notifyPurchaseCompleted,
+        notifyPurchaseFailed,
+        notifyRestoreCompleted,
+      }),
+      { virtual: false }
+    );
+
+    const pkg = {
+      identifier: 'annual_pkg',
+      product: { identifier: 'annual', price: 49.99, currencyCode: 'EUR' },
+    };
+    const Purchases = { purchasePackage };
+
+    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: Purchases,
+    });
+
+    await Purchases.purchasePackage(pkg);
+
+    expect(notifyPurchaseCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'annual',
+        price: 49.99,
+        currency: 'EUR',
+      })
+    );
 
     analyticsModule.stopRevenueCatPurchaseAnalyticsIfAvailable();
   });
@@ -284,31 +295,13 @@ describe('revenueCatPurchaseAnalytics', () => {
       }),
       { virtual: false }
     );
-    jest.doMock(
-      'react-native-purchases',
-      () => ({
-        __esModule: true,
-        default: {
-          purchaseProduct,
-        },
-      }),
-      { virtual: true }
-    );
-    jest.doMock(
-      'react-native-purchases-ui',
-      () => ({
-        __esModule: true,
-        default: function RevenueCatUI() {},
-      }),
-      { virtual: true }
-    );
+
+    const Purchases = { purchaseProduct };
 
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
-    analyticsModule.startRevenueCatPurchaseAnalyticsIfAvailable();
-
-    const Purchases = require('react-native-purchases').default as {
-      purchaseProduct: (productId: string) => Promise<unknown>;
-    };
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: Purchases,
+    });
 
     await expect(Purchases.purchaseProduct('pro_annual')).rejects.toBeTruthy();
 
@@ -363,31 +356,13 @@ describe('revenueCatPurchaseAnalytics', () => {
       }),
       { virtual: false }
     );
-    jest.doMock(
-      'react-native-purchases',
-      () => ({
-        __esModule: true,
-        default: {
-          purchaseProduct,
-        },
-      }),
-      { virtual: true }
-    );
-    jest.doMock(
-      'react-native-purchases-ui',
-      () => ({
-        __esModule: true,
-        default: function RevenueCatUI() {},
-      }),
-      { virtual: true }
-    );
+
+    const Purchases = { purchaseProduct };
 
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
-    analyticsModule.startRevenueCatPurchaseAnalyticsIfAvailable();
-
-    const Purchases = require('react-native-purchases').default as {
-      purchaseProduct: (productId: string) => Promise<unknown>;
-    };
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: Purchases,
+    });
 
     await expect(Purchases.purchaseProduct('pro_monthly')).rejects.toBeTruthy();
 
@@ -439,31 +414,13 @@ describe('revenueCatPurchaseAnalytics', () => {
       }),
       { virtual: false }
     );
-    jest.doMock(
-      'react-native-purchases',
-      () => ({
-        __esModule: true,
-        default: {
-          restorePurchases,
-        },
-      }),
-      { virtual: true }
-    );
-    jest.doMock(
-      'react-native-purchases-ui',
-      () => ({
-        __esModule: true,
-        default: function RevenueCatUI() {},
-      }),
-      { virtual: true }
-    );
+
+    const Purchases = { restorePurchases };
 
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
-    analyticsModule.startRevenueCatPurchaseAnalyticsIfAvailable();
-
-    const Purchases = require('react-native-purchases').default as {
-      restorePurchases: () => Promise<unknown>;
-    };
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: Purchases,
+    });
 
     await Purchases.restorePurchases();
 

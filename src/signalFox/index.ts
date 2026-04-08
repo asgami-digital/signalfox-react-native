@@ -11,15 +11,19 @@ export {
   reactNativeTouchablePatchIntegration,
   reactNavigationIntegration,
   nativePurchaseIntegration,
+  revenueCatIntegration,
+  REVENUECAT_ANALYTICS_INTEGRATION_NAME,
   applyModalPatch,
   applyTouchablePatch,
 } from './integrations';
+export type { RevenueCatIntegrationOptions } from './integrations';
 export { SignalFoxProvider, useSignalFox } from './provider';
 export type { SignalFoxProviderProps, SignalFoxContextValue } from './provider';
 export type {
   AnalyticsEvent,
   AnalyticsEventType,
   AnalyticsIntegration,
+  AnalyticsIntegrationSetupContext,
   FlowStepParams,
   SubviewParams,
   IAnalyticsCore,
