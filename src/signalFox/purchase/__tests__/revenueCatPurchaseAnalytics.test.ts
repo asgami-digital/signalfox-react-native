@@ -31,7 +31,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'ios' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,
@@ -86,7 +86,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'ios' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,
@@ -168,7 +168,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'ios' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,
@@ -234,7 +234,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'ios' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,
@@ -290,7 +290,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'android' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,
@@ -352,7 +352,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'ios' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,
@@ -410,7 +410,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       Platform: { OS: 'android' },
     }));
     jest.doMock(
-      '../nativePurchaseEventBridge',
+      '../purchaseAnalyticsBridge',
       () => ({
         notifyModalClosed,
         notifyModalOpened,

@@ -1,8 +1,8 @@
 import type { AnalyticsIntegration } from '../types/integration';
 
 /**
- * Garantiza que `nativePurchaseIntegration` corra antes que `revenueCatIntegration`
- * para que `activeCore` exista en el bridge cuando se instalen los parches de RevenueCat.
+ * Si usas ambas, `nativePurchaseAnalytics` antes que `revenueCatPurchaseAnalytics`:
+ * la nativa puede registrar el core y extras antes de parchear Purchases (opcional).
  */
 export function sortIntegrationsForSetup(
   list: readonly AnalyticsIntegration[]

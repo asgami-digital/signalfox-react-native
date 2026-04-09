@@ -1,10 +1,14 @@
 import type { AnalyticsIntegration } from '../types/integration';
 import {
+  registerPurchaseAnalyticsCore,
+  unregisterPurchaseAnalyticsCore,
+} from '../purchase/purchaseAnalyticsBridge';
+import {
   startRevenueCatPurchaseAnalytics,
   stopRevenueCatPurchaseAnalyticsIfAvailable,
 } from '../purchase/revenueCatPurchaseAnalytics';
 
-/** Nombre estable; `nativePurchaseIntegration` lo usa para desactivar el bridge nativo. */
+/** Nombre estable de la integración (orden en `sortIntegrationsForSetup`, etc.). */
 export const REVENUECAT_ANALYTICS_INTEGRATION_NAME =
   'revenueCatPurchaseAnalytics';
 
@@ -53,7 +57,8 @@ export interface RevenueCatIntegrationOptions {
 
 /**
  * Integración de analytics sobre RevenueCat: parchea `Purchases` (y opcionalmente `RevenueCatUI`).
- * Usa junto con `nativePurchaseIntegration()` para enlazar el core al bridge JS (`notify*`).
+ * No depende de `nativePurchaseIntegration` ni del canal nativo; solo registra el core en
+ * `purchaseAnalyticsBridge` para `notifyPurchase*` desde JS.
  */
 export function revenueCatIntegration(
   options: RevenueCatIntegrationOptions
@@ -63,7 +68,9 @@ export function revenueCatIntegration(
   return {
     name: REVENUECAT_ANALYTICS_INTEGRATION_NAME,
 
-    setup(_core, _context) {
+    setup(core, _context) {
+      registerPurchaseAnalyticsCore(core);
+
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const hasPkg = purchases && typeof purchases.purchasePackage === 'function';
         console.log('[SignalFox][RevenueCat] revenueCatIntegration.setup()', {
@@ -78,6 +85,7 @@ export function revenueCatIntegration(
 
       return () => {
         stopRevenueCatPurchaseAnalyticsIfAvailable();
+        unregisterPurchaseAnalyticsCore();
       };
     },
   };

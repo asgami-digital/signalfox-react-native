@@ -37,14 +37,21 @@ export {
 } from './utils/getActiveRouteInfo';
 
 export {
-  reconcileNativePurchaseState,
-  startListeningToNativePurchaseEvents,
-  stopListeningToNativePurchaseEvents,
+  registerPurchaseAnalyticsCore,
+  unregisterPurchaseAnalyticsCore,
   notifyPurchaseStarted,
   notifyPurchaseCancelled,
   notifyPurchaseCompleted,
   notifyPurchaseFailed,
   notifyRestoreCompleted,
+  notifyModalOpened,
+  notifyModalClosed,
+} from './purchase/purchaseAnalyticsBridge';
+
+export {
+  reconcileNativePurchaseState,
+  startListeningToNativePurchaseEvents,
+  stopListeningToNativePurchaseEvents,
 } from './purchase/nativePurchaseEventBridge';
 
 export type {

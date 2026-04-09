@@ -8,7 +8,7 @@ import {
   notifyPurchaseFailed,
   notifyPurchaseStarted,
   notifyRestoreCompleted,
-} from './nativePurchaseEventBridge';
+} from './purchaseAnalyticsBridge';
 
 const REVENUECAT_PAYWALL_MODAL_NAME = 'RevenueCat Paywall';
 const PAYWALL_PATCHABLE_METHODS = [
@@ -495,7 +495,7 @@ function isPurchasesModule(value: unknown): value is Record<string, unknown> {
 
 /**
  * Parchea métodos de `Purchases` (y opcionalmente `RevenueCatUI`) usando referencias inyectadas.
- * Debe llamarse después de `startListeningToNativePurchaseEvents` para que exista `activeCore`.
+ * Requiere que el core esté registrado (`registerPurchaseAnalyticsCore` hace `revenueCatIntegration`).
  */
 export function startRevenueCatPurchaseAnalytics(
   options: StartRevenueCatPurchaseAnalyticsOptions
