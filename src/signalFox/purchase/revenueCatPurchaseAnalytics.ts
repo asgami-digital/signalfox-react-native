@@ -514,10 +514,18 @@ export function startRevenueCatPurchaseAnalytics(
           purchaseInstall.patchedMethods.join(', ')
         );
       } else if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn(
-          '[SignalFox][RevenueCat] No se parcheó ningún método en el objeto `Purchases`. ¿Pasaste `import Purchases from "react-native-purchases"` (default)? ¿SDK inicializado? Buscados:',
-          [...PATCHABLE_METHODS, ...RESTORE_PATCHABLE_METHODS].join(', ')
-        );
+        const p = options.purchases as Record<string, unknown> | null;
+        const seemedPurchasesSdk =
+          p != null &&
+          (typeof p.configure === 'function' ||
+            typeof p.purchasePackage === 'function' ||
+            typeof p.purchaseProduct === 'function');
+        if (seemedPurchasesSdk) {
+          console.warn(
+            '[SignalFox][RevenueCat] No se parcheó ningún método en el objeto `Purchases`. Revisa la versión del SDK o que uses el default export. Buscados:',
+            [...PATCHABLE_METHODS, ...RESTORE_PATCHABLE_METHODS].join(', ')
+          );
+        }
       }
     } else {
       console.warn(

@@ -12,6 +12,7 @@ export {
   reactNavigationIntegration,
   nativePurchaseIntegration,
   revenueCatIntegration,
+  resolveRevenueCatPurchasesExport,
   REVENUECAT_ANALYTICS_INTEGRATION_NAME,
   applyModalPatch,
   applyTouchablePatch,

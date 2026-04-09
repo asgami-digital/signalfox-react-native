@@ -197,6 +197,9 @@ export default function App() {
       reactNavigationIntegration({ navigationRef }),
       appStateIntegration(),
       nativePurchaseIntegration(),
+      // Compras RevenueCat: instala react-native-purchases y añade p. ej.
+      // import Purchases from 'react-native-purchases';
+      // revenueCatIntegration({ purchases: Purchases }),
       reactNativeModalPatchIntegration(),
       reactNativeTouchablePatchIntegration(),
     ],
