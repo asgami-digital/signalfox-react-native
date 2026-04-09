@@ -103,6 +103,10 @@ describe('revenueCatPurchaseAnalytics', () => {
     (RevenueCatUI as any).Paywall = (props: Record<string, unknown>) =>
       React.createElement('rc-paywall', props);
 
+    const RevenueCatUIMock = RevenueCatUI as unknown as {
+      Paywall: React.ComponentType<Record<string, unknown>>;
+    };
+
     const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: {},
@@ -113,7 +117,7 @@ describe('revenueCatPurchaseAnalytics', () => {
 
     act(() => {
       tree = create(
-        React.createElement(RevenueCatUI.Paywall, { testID: 'paywall' })
+        React.createElement(RevenueCatUIMock.Paywall, { testID: 'paywall' })
       );
     });
 
@@ -149,14 +153,15 @@ describe('revenueCatPurchaseAnalytics', () => {
     const notifyPurchaseCompleted = jest.fn();
     const notifyPurchaseFailed = jest.fn();
     const notifyRestoreCompleted = jest.fn();
-    const purchaseProduct = jest.fn(() =>
-      Promise.resolve({
-        storeProduct: {
-          identifier: 'pro_monthly',
-          price: 7.99,
-          currencyCode: 'USD',
-        },
-      })
+    const purchaseProduct = jest.fn(
+      (_productId: string): Promise<unknown> =>
+        Promise.resolve({
+          storeProduct: {
+            identifier: 'pro_monthly',
+            price: 7.99,
+            currencyCode: 'USD',
+          },
+        })
     );
 
     jest.doMock('react-native', () => ({
@@ -216,12 +221,13 @@ describe('revenueCatPurchaseAnalytics', () => {
     const notifyPurchaseFailed = jest.fn();
     const notifyRestoreCompleted = jest.fn();
 
-    const purchasePackage = jest.fn(() =>
-      Promise.resolve({
-        productIdentifier: 'annual',
-        customerInfo: {},
-        transaction: { productIdentifier: 'annual' },
-      })
+    const purchasePackage = jest.fn(
+      (_pkg: unknown): Promise<unknown> =>
+        Promise.resolve({
+          productIdentifier: 'annual',
+          customerInfo: {},
+          transaction: { productIdentifier: 'annual' },
+        })
     );
 
     jest.doMock('react-native', () => ({
@@ -273,10 +279,11 @@ describe('revenueCatPurchaseAnalytics', () => {
     const notifyPurchaseCompleted = jest.fn();
     const notifyPurchaseFailed = jest.fn();
     const notifyRestoreCompleted = jest.fn();
-    const purchaseProduct = jest.fn(() =>
-      Promise.reject({
-        userCancelled: true,
-      })
+    const purchaseProduct = jest.fn(
+      (_productId: string): Promise<unknown> =>
+        Promise.reject({
+          userCancelled: true,
+        })
     );
 
     jest.doMock('react-native', () => ({
@@ -333,11 +340,12 @@ describe('revenueCatPurchaseAnalytics', () => {
     const notifyPurchaseCompleted = jest.fn();
     const notifyPurchaseFailed = jest.fn();
     const notifyRestoreCompleted = jest.fn();
-    const purchaseProduct = jest.fn(() =>
-      Promise.reject({
-        code: 'NETWORK_ERROR',
-        message: 'timeout',
-      })
+    const purchaseProduct = jest.fn(
+      (_productId: string): Promise<unknown> =>
+        Promise.reject({
+          code: 'NETWORK_ERROR',
+          message: 'timeout',
+        })
     );
 
     jest.doMock('react-native', () => ({
