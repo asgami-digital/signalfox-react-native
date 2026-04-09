@@ -246,7 +246,14 @@ export function notifyPurchaseStarted(
 ): void {
   setPendingPurchaseProductId((payload as { productId?: string }).productId);
 
-  if (!activeCore) return;
+  if (!activeCore) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      debugWarn(
+        'notifyPurchaseStarted: sin activeCore — el evento no se enviará al core. Incluye nativePurchaseIntegration() y asegúrate de que monte antes que revenueCatIntegration (SignalFox ordena esto automáticamente).'
+      );
+    }
+    return;
+  }
 
   const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
     ...(payload as any),

@@ -14,6 +14,7 @@ import { isDevApiKey } from '../core/constants';
 import { appStateIntegration } from '../integrations/appStateIntegration';
 import { nativePurchaseIntegration } from '../integrations/nativePurchaseIntegration';
 import { reactNativeModalPatchIntegration } from '../integrations/reactNativeModalPatch';
+import { sortIntegrationsForSetup } from '../utils/sortIntegrationsForSetup';
 import type { AnalyticsIntegration } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
 import type { FlowStepParams } from '../types/events';
@@ -86,7 +87,7 @@ export function SignalFoxProvider({
         instance.startFlushTimer();
       }
 
-      const list =
+      const rawList =
         integrations.length > 0
           ? integrations
           : [
@@ -94,6 +95,7 @@ export function SignalFoxProvider({
               nativePurchaseIntegration(),
               reactNativeModalPatchIntegration(),
             ];
+      const list = sortIntegrationsForSetup(rawList);
       const setupContext = { allIntegrations: list } as const;
       cleanupRef.current = list.map((integration) =>
         integration.setup(instance, setupContext)

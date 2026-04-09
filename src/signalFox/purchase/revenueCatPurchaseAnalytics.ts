@@ -280,8 +280,12 @@ function inferRestoreProductIds(result: unknown): string[] | undefined {
   return undefined;
 }
 
-function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
+function installRevenueCatPurchaseHooks(Purchases: any): {
+  teardown: () => void;
+  patchedMethods: string[];
+} | null {
   const originals = new Map<string, (...args: unknown[]) => Promise<unknown>>();
+  const patchedMethods: string[] = [];
 
   const platform = Platform.OS === 'ios' ? 'ios' : 'android';
   const store = platform === 'ios' ? 'app_store' : 'google_play';
@@ -294,9 +298,15 @@ function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
       ...args: unknown[]
     ) => Promise<unknown>;
     originals.set(name, boundOriginal);
+    patchedMethods.push(name);
 
     Purchases[name] = (...args: unknown[]) => {
       const productId = purchaseProductIdFromArgs(name, args);
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[SignalFox][RevenueCat] compra interceptada', name, {
+          productId: productId ?? '(sin id)',
+        });
+      }
       notifyPurchaseStarted({
         productId,
         platform,
@@ -350,6 +360,7 @@ function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
       ...args: unknown[]
     ) => Promise<unknown>;
     originals.set(name, boundOriginal);
+    patchedMethods.push(name);
 
     Purchases[name] = (...args: unknown[]) => {
       return boundOriginal(...args).then(
@@ -370,11 +381,13 @@ function installRevenueCatPurchaseHooks(Purchases: any): (() => void) | null {
 
   if (originals.size === 0) return null;
 
-  return () => {
+  const teardown = () => {
     for (const [name, fn] of originals) {
       Purchases[name] = fn;
     }
   };
+
+  return { teardown, patchedMethods };
 }
 
 function installRevenueCatPaywallHooks(
@@ -491,13 +504,19 @@ export function startRevenueCatPurchaseAnalytics(
     const teardowns: Array<() => void> = [];
 
     if (isPurchasesModule(options.purchases)) {
-      const purchaseTeardown = installRevenueCatPurchaseHooks(
+      const purchaseInstall = installRevenueCatPurchaseHooks(
         options.purchases as any
       );
-      if (purchaseTeardown) {
-        teardowns.push(purchaseTeardown);
+      if (purchaseInstall) {
+        teardowns.push(purchaseInstall.teardown);
         console.log(
-          '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de compra activados'
+          '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de compra activados:',
+          purchaseInstall.patchedMethods.join(', ')
+        );
+      } else if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn(
+          '[SignalFox][RevenueCat] No se parcheó ningún método en el objeto `Purchases`. ¿Pasaste `import Purchases from "react-native-purchases"` (default)? ¿SDK inicializado? Buscados:',
+          [...PATCHABLE_METHODS, ...RESTORE_PATCHABLE_METHODS].join(', ')
         );
       }
     } else {
