@@ -73,6 +73,24 @@ export function SignalFoxProvider({
       coreRef.current = instance;
       instance.startSession();
 
+      const rawList =
+        integrations.length > 0
+          ? integrations
+          : [
+              appStateIntegration(),
+              nativePurchaseIntegration(),
+              reactNativeModalPatchIntegration(),
+            ];
+      const list = sortIntegrationsForSetup(rawList);
+      const setupContext = { allIntegrations: list } as const;
+      // Antes de `await init()` y `flushPending`: si incluyes `reactNavigationIntegration`,
+      // su `setup` marca intención de navegación y registra listeners. Así el primer
+      // `trackStep` no gana la carrera a un `screen_view`. Sin integración de navegación,
+      // nadie marca pending: no forzamos buffer ni asumimos pantallas.
+      cleanupRef.current = list.map((integration) =>
+        integration.setup(instance, setupContext)
+      );
+
       await instance.init();
       if (isCancelled) {
         instance.destroy();
@@ -86,20 +104,6 @@ export function SignalFoxProvider({
       if (!isDevApiKey(apiKey)) {
         instance.startFlushTimer();
       }
-
-      const rawList =
-        integrations.length > 0
-          ? integrations
-          : [
-              appStateIntegration(),
-              nativePurchaseIntegration(),
-              reactNativeModalPatchIntegration(),
-            ];
-      const list = sortIntegrationsForSetup(rawList);
-      const setupContext = { allIntegrations: list } as const;
-      cleanupRef.current = list.map((integration) =>
-        integration.setup(instance, setupContext)
-      );
     };
 
     setup().catch((error) => {
