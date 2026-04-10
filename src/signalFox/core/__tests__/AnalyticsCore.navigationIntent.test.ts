@@ -146,4 +146,35 @@ describe('AnalyticsCore navigation intent buffer', () => {
     expect(onTimeout).toHaveBeenCalledTimes(1);
     expect(mockedSendEvents).toHaveBeenCalledTimes(1);
   });
+
+  it('no extiende indefinidamente el timeout si markNavigationIntentPending se repite', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+    const onTimeout = jest.fn();
+    core.setNavigationIntentTimeoutListener(onTimeout);
+
+    core.markNavigationIntentPending();
+    core.trackStep({
+      flow_name: 'onboarding',
+      id: 'welcome',
+      displayName: 'Welcome',
+    });
+    await core.flush();
+    expect(mockedSendEvents).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(Math.floor(NAVIGATION_INTENT_BUFFER_MAX_MS / 2));
+    core.markNavigationIntentPending();
+    jest.advanceTimersByTime(
+      NAVIGATION_INTENT_BUFFER_MAX_MS - Math.floor(NAVIGATION_INTENT_BUFFER_MAX_MS / 2)
+    );
+    await core.flush();
+
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const sent = mockedSendEvents.mock.calls[0]![0].events ?? [];
+    expect(sent[0]?.event_name).toBe('flow_step_view');
+  });
 });

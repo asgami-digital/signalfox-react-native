@@ -83,6 +83,15 @@ export function SignalFoxProvider({
             ];
       const list = sortIntegrationsForSetup(rawList);
       const setupContext = { allIntegrations: list } as const;
+      const hasReactNavigationIntegration = list.some(
+        (integration) => integration.name === 'reactNavigation'
+      );
+      if (hasReactNavigationIntegration) {
+        // Cinturón y tirantes: si hay integración de navegación, asumimos una transición
+        // inicial pendiente para que eventos tempranos (p. ej. flow_step_view) no se
+        // procesen antes de tener oportunidad de resolver pantalla activa.
+        instance.markNavigationIntentPending?.();
+      }
       // Antes de `await init()` y `flushPending`: si incluyes `reactNavigationIntegration`,
       // su `setup` marca intención de navegación y registra listeners. Así el primer
       // `trackStep` no gana la carrera a un `screen_view`. Sin integración de navegación,

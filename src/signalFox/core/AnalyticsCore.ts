@@ -315,6 +315,12 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   markNavigationIntentPending(): void {
+    // Hard cap de retención: si ya hay intent pendiente no extendemos el timeout.
+    // Evita que ráfagas de acciones (__unsafe_action__) mantengan eventos retenidos
+    // indefinidamente (p. ej. flow_step_view en primera pantalla).
+    if (this.navigationIntentPendingSinceMs !== null) {
+      return;
+    }
     const marker = Date.now();
     this.navigationIntentPendingSinceMs = marker;
     if (this.navigationIntentTimer) {
