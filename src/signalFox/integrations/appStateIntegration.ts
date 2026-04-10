@@ -55,16 +55,25 @@ export function appStateIntegration(): AnalyticsIntegration {
         (AppState.currentState as AppStateStatus) ??
         ('active' as AppStateStatus);
       const isIOS = Platform.OS === 'ios';
+      let hasTrackedInitialOpen = false;
 
-      // Al montar: si ya estamos activos, es app_open + session_start
-      if (previousState === 'active') {
+      const trackInitialOpenIfNeeded = (state: AppStateStatus): boolean => {
+        if (hasTrackedInitialOpen || state !== 'active') {
+          return false;
+        }
         core.trackEvent({ type: 'app_open' });
         core.trackEvent({ type: 'session_start' });
-      }
+        hasTrackedInitialOpen = true;
+        return true;
+      };
+
+      // Al montar: si ya estamos activos, es app_open + session_start
+      trackInitialOpenIfNeeded(previousState);
 
       const subscription = AppState.addEventListener(
         'change',
         (nextState: AppStateStatus) => {
+          const trackedInitialOpenNow = trackInitialOpenIfNeeded(nextState);
           const signal = resolveLifecycleSignal({
             previousState,
             nextState,
@@ -78,10 +87,10 @@ export function appStateIntegration(): AnalyticsIntegration {
             platform: Platform.OS,
           });
 
-          if (signal === 'enter_foreground') {
+          if (!trackedInitialOpenNow && signal === 'enter_foreground') {
             core.trackEvent({ type: 'app_foreground' });
             core.trackEvent({ type: 'session_start' });
-          } else if (signal === 'enter_background') {
+          } else if (!trackedInitialOpenNow && signal === 'enter_background') {
             core.trackEvent({ type: 'app_background' });
             core.trackEvent({ type: 'session_end' });
           }
