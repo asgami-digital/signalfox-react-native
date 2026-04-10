@@ -20,11 +20,13 @@ import {
 import { EventFamily, getCanonicalTriple } from '../api/canonicalTaxonomy';
 import { toBackendEventDto } from '../api/eventMapper';
 import {
+  computePurchaseTerminalAdjustedTimestamp,
   DEFAULT_BATCH_SIZE,
   DEFAULT_FLUSH_INTERVAL_MS,
   EVENT_SCREEN_RESOLUTION_DELAY_MS,
   isDevApiKey,
   isPurchaseFamilyEventType,
+  isPurchaseFlowTerminalEventType,
   NAVIGATION_INTENT_BUFFER_MAX_MS,
   shouldDelayScreenResolution,
 } from './constants';
@@ -227,6 +229,11 @@ export class AnalyticsCore implements IAnalyticsCore {
   > = [];
   private navigationIntentTimeoutListener: (() => void) | null = null;
 
+  /** Timestamp del último `purchase_started` procesado (flujo pendiente de cierre). */
+  private pendingPurchaseStartedTimestamp: number | null = null;
+  /** Timestamp del primer evento no terminal entre started y completed/cancel/fail. */
+  private firstTimestampAfterPurchaseStarted: number | null = null;
+
   constructor(config: AnalyticsCoreConfig) {
     this.apiKey = config.apiKey;
     this.appVersion = '0.0.0';
@@ -419,12 +426,37 @@ export class AnalyticsCore implements IAnalyticsCore {
     // de resolución de pantalla si aplica). Las integraciones pueden fijar `timestamp`
     // (ms desde epoch) en el objeto pasado a trackEvent para anclar el instante real.
     const explicitTs = (event as { timestamp?: unknown }).timestamp;
-    const eventTimestamp =
+    let eventTimestamp =
       typeof explicitTs === 'number' &&
       Number.isFinite(explicitTs) &&
       explicitTs > 0
         ? explicitTs
         : Date.now();
+
+    const eventType = event.type;
+    if (isPurchaseFlowTerminalEventType(eventType)) {
+      if (
+        this.pendingPurchaseStartedTimestamp !== null &&
+        this.firstTimestampAfterPurchaseStarted !== null
+      ) {
+        eventTimestamp = computePurchaseTerminalAdjustedTimestamp(
+          this.pendingPurchaseStartedTimestamp,
+          this.firstTimestampAfterPurchaseStarted
+        );
+      }
+      this.pendingPurchaseStartedTimestamp = null;
+      this.firstTimestampAfterPurchaseStarted = null;
+    } else if (eventType === 'purchase_started') {
+      this.pendingPurchaseStartedTimestamp = eventTimestamp;
+      this.firstTimestampAfterPurchaseStarted = null;
+    } else if (
+      this.pendingPurchaseStartedTimestamp !== null &&
+      !isPurchaseFlowTerminalEventType(eventType)
+    ) {
+      if (this.firstTimestampAfterPurchaseStarted === null) {
+        this.firstTimestampAfterPurchaseStarted = eventTimestamp;
+      }
+    }
 
     // Siempre adjuntamos el modal "padre" (último abierto) para enlazar jerarquías de UI.
     // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
@@ -780,6 +812,8 @@ export class AnalyticsCore implements IAnalyticsCore {
   destroy(): void {
     this.stopFlushTimer();
     this.clearNavigationIntentPending();
+    this.pendingPurchaseStartedTimestamp = null;
+    this.firstTimestampAfterPurchaseStarted = null;
     this.scheduleFlush();
   }
 }

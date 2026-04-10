@@ -1,0 +1,138 @@
+jest.mock('../../../NativeSignalfoxReactNative', () => ({
+  default: {
+    getAppVersion: jest.fn(() => Promise.resolve('1.0.0')),
+    getAnonymousId: jest.fn(() => Promise.resolve('test-anon')),
+  },
+}));
+
+import { AnalyticsCore } from '../AnalyticsCore';
+import { sendEvents } from '../../api/signalFoxApi';
+
+jest.mock('../../api/signalFoxApi', () => {
+  const actual = jest.requireActual<typeof import('../../api/signalFoxApi')>(
+    '../../api/signalFoxApi'
+  );
+  return {
+    ...actual,
+    sendEvents: jest.fn(() => Promise.resolve()),
+  };
+});
+
+const mockedSendEvents = sendEvents as jest.MockedFunction<typeof sendEvents>;
+
+function isoToMs(iso: string | null | undefined): number {
+  if (iso == null || iso === '') return NaN;
+  return new Date(iso).getTime();
+}
+
+describe('AnalyticsCore purchase flow timestamps', () => {
+  beforeEach(() => {
+    mockedSendEvents.mockClear();
+  });
+
+  it('retrocede purchase_completed 10 ms antes del primer evento intermedio', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    core.trackEvent({
+      type: 'purchase_started',
+      timestamp: 1_700_000_000_000,
+      payload: {},
+    } as any);
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: 1_700_000_000_100,
+      payload: { screen_name: 'Premium' },
+    } as any);
+    core.trackEvent({
+      type: 'purchase_completed',
+      timestamp: 1_700_000_000_500,
+      payload: {},
+    } as any);
+
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const batch = mockedSendEvents.mock.calls[0]![0];
+    const events = batch.events as Array<{
+      event_name?: string;
+      event_timestamp?: string | null;
+    }>;
+    const completed = events.find((e) => e.event_name === 'purchase_completed');
+    expect(completed).toBeDefined();
+    expect(isoToMs(completed!.event_timestamp)).toBe(1_700_000_000_090);
+  });
+
+  it('si -10 ms cae antes del started, usa punto medio entre started e intermedio', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    const t0 = 1_700_000_000_000;
+    core.trackEvent({
+      type: 'purchase_started',
+      timestamp: t0,
+      payload: {},
+    } as any);
+    core.trackEvent({
+      type: 'component_press',
+      timestamp: t0 + 5,
+      payload: {},
+      signalFoxId: 'b',
+      target_type: 'button',
+    } as any);
+    core.trackEvent({
+      type: 'purchase_failed',
+      timestamp: t0 + 200,
+      payload: {},
+    } as any);
+
+    await core.flush();
+
+    const batch = mockedSendEvents.mock.calls[0]![0];
+    const events = batch.events as Array<{
+      event_name?: string;
+      event_timestamp?: string | null;
+    }>;
+    const failed = events.find((e) => e.event_name === 'purchase_failed');
+    expect(failed).toBeDefined();
+    expect(isoToMs(failed!.event_timestamp)).toBe(
+      Math.floor((t0 + (t0 + 5)) / 2)
+    );
+  });
+
+  it('sin eventos intermedios, mantiene el timestamp del terminal', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    const tDone = 1_700_000_000_777;
+    core.trackEvent({
+      type: 'purchase_started',
+      timestamp: 1_700_000_000_000,
+      payload: {},
+    } as any);
+    core.trackEvent({
+      type: 'purchase_cancelled',
+      timestamp: tDone,
+      payload: {},
+    } as any);
+
+    await core.flush();
+
+    const batch = mockedSendEvents.mock.calls[0]![0];
+    const events = batch.events as Array<{
+      event_name?: string;
+      event_timestamp?: string | null;
+    }>;
+    const cancelled = events.find((e) => e.event_name === 'purchase_cancelled');
+    expect(isoToMs(cancelled!.event_timestamp)).toBe(tDone);
+  });
+});

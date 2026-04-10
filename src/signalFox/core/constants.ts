@@ -49,3 +49,49 @@ export function shouldDelayScreenResolution(
 ): boolean {
   return !NO_SCREEN_RESOLUTION_DELAY_TYPES.has(eventType);
 }
+
+/**
+ * Desfase respecto al primer evento no terminal entre `purchase_started` y el cierre del flujo,
+ * para que `purchase_completed` / `cancelled` / `failed` queden anclados justo antes en la línea de tiempo.
+ */
+export const PURCHASE_TERMINAL_TIMESTAMP_OFFSET_MS = 10;
+
+/** Cierre lógico del flujo iniciado con `purchase_started` (RevenueCat / bridge JS). */
+export function isPurchaseFlowTerminalEventType(
+  eventType: AnalyticsEventType
+): boolean {
+  return (
+    eventType === 'purchase_completed' ||
+    eventType === 'purchase_cancelled' ||
+    eventType === 'purchase_failed'
+  );
+}
+
+/**
+ * Garantiza startedTs < resultado < firstInterveningTs cuando hay margen en ms enteros.
+ * Si firstInterveningTs - offset cae en o antes de startedTs, usa el punto medio (floor).
+ */
+export function computePurchaseTerminalAdjustedTimestamp(
+  startedTs: number,
+  firstInterveningTs: number
+): number {
+  if (firstInterveningTs <= startedTs) {
+    return startedTs;
+  }
+  const candidate =
+    firstInterveningTs - PURCHASE_TERMINAL_TIMESTAMP_OFFSET_MS;
+  if (candidate > startedTs) {
+    return candidate;
+  }
+  let mid = Math.floor((startedTs + firstInterveningTs) / 2);
+  if (mid <= startedTs) {
+    mid = startedTs + 1;
+  }
+  if (mid >= firstInterveningTs) {
+    mid = firstInterveningTs - 1;
+  }
+  if (mid <= startedTs) {
+    return startedTs;
+  }
+  return mid;
+}
