@@ -357,6 +357,10 @@ export class AnalyticsCore implements IAnalyticsCore {
       const ev = this.navigationIntentBuffer.shift()!;
       this.processEvent(ev);
     }
+    // Si el buffer volcó eventos y no alcanzan batch, aún así los intentamos enviar.
+    if (this.queue.length > 0 && !this.sendPermanentlyDisabled) {
+      this.scheduleFlush();
+    }
   }
 
   private pickOptionalString(value: unknown): string | null {
@@ -584,7 +588,12 @@ export class AnalyticsCore implements IAnalyticsCore {
     const bypassNavigationIntentBuffer =
       event.type === 'screen_view' ||
       event.type === 'modal_open' ||
-      event.type === 'modal_close';
+      event.type === 'modal_close' ||
+      event.type === 'app_open' ||
+      event.type === 'app_foreground' ||
+      event.type === 'app_background' ||
+      event.type === 'session_start' ||
+      event.type === 'session_end';
 
     if (
       this.navigationIntentPendingSinceMs !== null &&

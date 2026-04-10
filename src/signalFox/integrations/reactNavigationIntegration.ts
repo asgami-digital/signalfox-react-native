@@ -300,6 +300,7 @@ export function reactNavigationIntegration(
       let previousScreenName: string | undefined;
       let lastActiveBranchKey: string | null = null;
       let pendingNavigationTimestamp: number | null = null;
+      let bootstrapInterval: ReturnType<typeof setInterval> | null = null;
 
       const markNavigationIntent = () => {
         pendingNavigationTimestamp = Date.now();
@@ -310,6 +311,13 @@ export function reactNavigationIntegration(
       core.setNavigationIntentTimeoutListener?.(() => {
         pendingNavigationTimestamp = null;
       });
+
+      const stopBootstrapPolling = () => {
+        if (bootstrapInterval) {
+          clearInterval(bootstrapInterval);
+          bootstrapInterval = null;
+        }
+      };
 
       const handleStateChange = () => {
         const ref = navigationRef.current;
@@ -385,6 +393,8 @@ export function reactNavigationIntegration(
 
         previousScreenName = activeName;
         core.clearNavigationIntentPending?.();
+        // Primera pantalla resuelta: dejamos de hacer polling de arranque.
+        stopBootstrapPolling();
       };
 
       const unsubscribers: Array<() => void> = [];
@@ -427,11 +437,9 @@ export function reactNavigationIntegration(
         if (typeof unsubReady === 'function') unsubscribers.push(unsubReady);
       }
 
-      let interval: ReturnType<typeof setInterval> | null = null;
-      if (unsubscribers.length === 0) {
-        // Fallback: polling mínimo hasta que podamos leer el estado.
-        interval = setInterval(handleStateChange, POLL_INTERVAL_MS);
-      }
+      // Polling de bootstrap siempre activo al inicio para no depender solo de listeners.
+      // En release puede haber carreras donde el primer state/ready no se observe.
+      bootstrapInterval = setInterval(handleStateChange, POLL_INTERVAL_MS);
 
       // Intento inicial si el container ya está listo.
       try {
@@ -446,7 +454,7 @@ export function reactNavigationIntegration(
         core.setNavigationIntentTimeoutListener?.(null);
         core.clearNavigationIntentPending?.();
         for (const u of unsubscribers) u();
-        if (interval) clearInterval(interval);
+        stopBootstrapPolling();
       };
     },
   };
