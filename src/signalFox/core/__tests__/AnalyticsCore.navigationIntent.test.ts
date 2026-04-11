@@ -2,6 +2,8 @@ jest.mock('../../../NativeSignalfoxReactNative', () => ({
   default: {
     getAppVersion: jest.fn(() => Promise.resolve('1.0.0')),
     getAnonymousId: jest.fn(() => Promise.resolve('test-anon')),
+    getDeviceModel: jest.fn(() => Promise.resolve('jest-device')),
+    getOsVersion: jest.fn(() => Promise.resolve('jest-os')),
   },
 }));
 
@@ -23,7 +25,8 @@ const mockedSendEvents = sendEvents as jest.MockedFunction<typeof sendEvents>;
 
 describe('AnalyticsCore navigation intent buffer', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    // Legacy: las promesas del mock nativo deben resolverse junto a temporizadores falsos.
+    jest.useFakeTimers({ legacyFakeTimers: true });
     mockedSendEvents.mockClear();
   });
 

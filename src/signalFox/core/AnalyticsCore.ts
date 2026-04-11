@@ -216,7 +216,11 @@ export class AnalyticsCore implements IAnalyticsCore {
   private sessionId: string | null = null;
   private currentScreenName: string | null = null;
   private readonly queue: QueuedEvent[] = [];
-  private isFlushing = false;
+  /**
+   * Encadena pasadas de envío para que nunca haya dos `flush` concurrentes
+   * (p. ej. `scheduleFlush` + `await flush()`), incluso durante lecturas nativas async.
+   */
+  private flushPassChain: Promise<void> = Promise.resolve();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   /** Tras un 4xx irreversible (p. ej. API key inválida): no más red ni cola. */
   private sendPermanentlyDisabled = false;
@@ -245,10 +249,10 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   /**
-   * Inicialización asíncrona opcional para hidratar anonymousId desde nativo.
-   * Si nativo falla, mantiene fallback en memoria sin romper el flujo.
+   * Versión de app, modelo y OS desde nativo (promesas cacheadas a nivel módulo).
+   * Convoca antes de transportar o al iniciar el core para no etiquetar eventos con `0.0.0`.
    */
-  async init(): Promise<void> {
+  private async refreshTransportMetadataFromNative(): Promise<void> {
     try {
       const nativeAppVersion = await getNativeAppVersion();
       if (nativeAppVersion) {
@@ -257,21 +261,6 @@ export class AnalyticsCore implements IAnalyticsCore {
     } catch (error) {
       console.warn(
         '[AUTO_ANALYTICS] Failed to read native app version. Using fallback value.',
-        error
-      );
-    }
-
-    try {
-      const nativeAnonymousId = await SignalfoxReactNative.getAnonymousId();
-      if (
-        typeof nativeAnonymousId === 'string' &&
-        nativeAnonymousId.length > 0
-      ) {
-        this.anonymousId = nativeAnonymousId;
-      }
-    } catch (error) {
-      console.warn(
-        '[AUTO_ANALYTICS] Failed to read native anonymousId. Using memory fallback.',
         error
       );
     }
@@ -295,6 +284,29 @@ export class AnalyticsCore implements IAnalyticsCore {
       }
     } catch (error) {
       console.warn('[AUTO_ANALYTICS] Failed to read native os version.', error);
+    }
+  }
+
+  /**
+   * Inicialización asíncrona opcional para hidratar anonymousId desde nativo.
+   * Si nativo falla, mantiene fallback en memoria sin romper el flujo.
+   */
+  async init(): Promise<void> {
+    await this.refreshTransportMetadataFromNative();
+
+    try {
+      const nativeAnonymousId = await SignalfoxReactNative.getAnonymousId();
+      if (
+        typeof nativeAnonymousId === 'string' &&
+        nativeAnonymousId.length > 0
+      ) {
+        this.anonymousId = nativeAnonymousId;
+      }
+    } catch (error) {
+      console.warn(
+        '[AUTO_ANALYTICS] Failed to read native anonymousId. Using memory fallback.',
+        error
+      );
     }
   }
 
@@ -737,8 +749,14 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   async flush(): Promise<void> {
+    const run = () => this.performFlushPass();
+    const job = this.flushPassChain.then(run);
+    this.flushPassChain = job.catch(() => {});
+    await job;
+  }
+
+  private async performFlushPass(): Promise<void> {
     if (this.sendPermanentlyDisabled) return;
-    if (this.isFlushing) return;
     if (this.queue.length === 0) return;
 
     if (this.logOnly) {
@@ -746,33 +764,42 @@ export class AnalyticsCore implements IAnalyticsCore {
       return;
     }
 
-    this.isFlushing = true;
-    try {
-      while (this.queue.length > 0) {
-        const batch = this.queue.slice(0, this.batchSize);
-        if (!batch.length) break;
+    await this.refreshTransportMetadataFromNative();
 
-        const sent = await this.sendBatch(batch);
-        if (!sent) break;
+    while (this.queue.length > 0) {
+      const batch = this.queue.slice(0, this.batchSize);
+      if (!batch.length) break;
 
-        this.queue.splice(0, batch.length);
-      }
-    } finally {
-      this.isFlushing = false;
-      if (
-        this.immediateFlush &&
-        this.queue.length > 0 &&
-        !this.sendPermanentlyDisabled
-      ) {
-        this.scheduleFlush();
-      }
+      const sent = await this.sendBatch(batch);
+      if (!sent) break;
+
+      this.queue.splice(0, batch.length);
     }
+
+    if (
+      this.immediateFlush &&
+      this.queue.length > 0 &&
+      !this.sendPermanentlyDisabled
+    ) {
+      this.scheduleFlush();
+    }
+  }
+
+  private mergeLatestTransportFields(event: QueuedEvent): AnalyticsEvent {
+    return {
+      ...event,
+      app_version: this.appVersion,
+      device_model: this.deviceModel ?? event.device_model,
+      os_version: this.osVersion ?? event.os_version ?? null,
+    } as AnalyticsEvent;
   }
 
   private async sendBatch(events: QueuedEvent[]): Promise<boolean> {
     try {
       if (!events.length) return true;
-      const dtoEvents = events.map(toBackendEventDto);
+      const dtoEvents = events.map((e) =>
+        toBackendEventDto(this.mergeLatestTransportFields(e))
+      );
       await sendEvents({
         apiKey: this.apiKey,
         events: dtoEvents,

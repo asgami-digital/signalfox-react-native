@@ -70,6 +70,14 @@ export function SignalFoxProvider({
         logOnly,
       });
 
+      // Versión (y resto de metadata nativa de transporte) antes de registrar listeners:
+      // p. ej. `appStateIntegration` emite `app_open`/`session_start` en el mismo tick de setup.
+      await instance.init();
+      if (isCancelled) {
+        instance.destroy();
+        return;
+      }
+
       coreRef.current = instance;
       instance.startSession();
 
@@ -92,16 +100,16 @@ export function SignalFoxProvider({
         // procesen antes de tener oportunidad de resolver pantalla activa.
         instance.markNavigationIntentPending?.();
       }
-      // Antes de `await init()` y `flushPending`: si incluyes `reactNavigationIntegration`,
-      // su `setup` marca intención de navegación y registra listeners. Así el primer
-      // `trackStep` no gana la carrera a un `screen_view`. Sin integración de navegación,
-      // nadie marca pending: no forzamos buffer ni asumimos pantallas.
+      // Tras `init()`: si incluyes `reactNavigationIntegration`, su `setup` marca intención
+      // de navegación y registra listeners. Así el primer `trackStep` no gana la carrera
+      // a un `screen_view`. Sin integración de navegación, nadie marca pending.
       cleanupRef.current = list.map((integration) =>
         integration.setup(instance, setupContext)
       );
 
-      await instance.init();
       if (isCancelled) {
+        cleanupRef.current.forEach((cleanup) => cleanup());
+        cleanupRef.current = [];
         instance.destroy();
         coreRef.current = null;
         pendingRef.current = [];
