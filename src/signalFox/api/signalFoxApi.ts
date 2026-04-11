@@ -39,7 +39,7 @@ export async function sendEvents(params: {
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
-      test: 'ESTA ES LA PRUEBA 2',
+      test: 'ESTA ES LA PRUEBA 3',
     },
     body: JSON.stringify(body),
   });

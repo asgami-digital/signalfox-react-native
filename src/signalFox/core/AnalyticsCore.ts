@@ -237,6 +237,15 @@ export class AnalyticsCore implements IAnalyticsCore {
   private pendingPurchaseStartedTimestamp: number | null = null;
   /** Timestamp del primer evento no terminal entre started y completed/cancel/fail. */
   private firstTimestampAfterPurchaseStarted: number | null = null;
+  /**
+   * Pantalla y modal activos en el momento de `purchase_started`, reutilizados en
+   * `purchase_completed` / `purchase_failed` / `purchase_cancelled` (misma atribución
+   * que el inicio del flujo aunque el store sheet cierre o cambie la pantalla).
+   */
+  private pendingPurchaseSurfaceContext: {
+    screenName: string | null;
+    parentModal: string | null;
+  } | null = null;
 
   constructor(config: AnalyticsCoreConfig) {
     this.apiKey = config.apiKey;
@@ -379,6 +388,15 @@ export class AnalyticsCore implements IAnalyticsCore {
     return trimOptionalString(value);
   }
 
+  private parentModalSnapshotFromPayload(
+    payload: Record<string, unknown>
+  ): string | null {
+    if (!Object.prototype.hasOwnProperty.call(payload, 'parent_modal')) {
+      return null;
+    }
+    return trimOptionalString(payload.parent_modal);
+  }
+
   private resolveScreenName(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): string | null {
@@ -498,9 +516,32 @@ export class AnalyticsCore implements IAnalyticsCore {
     if (typeof nextPayload.parent_modal === 'undefined') {
       nextPayload.parent_modal = parentModal;
     }
+
+    const applyPurchaseTerminalSurface =
+      isPurchaseFlowTerminalEventType(eventType) &&
+      this.pendingPurchaseSurfaceContext != null;
+
+    if (applyPurchaseTerminalSurface) {
+      const snap = this.pendingPurchaseSurfaceContext!;
+      nextPayload.parent_modal = snap.parentModal;
+    }
+
     (event as { payload?: unknown }).payload = nextPayload;
 
-    const resolvedScreenName = this.resolveScreenName(event);
+    const resolvedScreenName = applyPurchaseTerminalSurface
+      ? this.pendingPurchaseSurfaceContext!.screenName
+      : this.resolveScreenName(event);
+
+    if (eventType === 'purchase_started') {
+      this.pendingPurchaseSurfaceContext = {
+        screenName: resolvedScreenName,
+        parentModal: this.parentModalSnapshotFromPayload(nextPayload),
+      };
+    }
+
+    if (isPurchaseFlowTerminalEventType(eventType)) {
+      this.pendingPurchaseSurfaceContext = null;
+    }
     const family = getCanonicalTriple(event.type).event_family;
     const explicitSignalFoxId =
       this.pickOptionalString((event as { signalFoxId?: unknown }).signalFoxId) ??
@@ -554,7 +595,7 @@ export class AnalyticsCore implements IAnalyticsCore {
       ...(resolvedScreenName ? { screen_name: resolvedScreenName } : {}),
     } as AnalyticsEvent;
 
-    if (resolvedScreenName) {
+    if (resolvedScreenName && !applyPurchaseTerminalSurface) {
       this.currentScreenName = resolvedScreenName;
     }
 
@@ -856,6 +897,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     this.clearNavigationIntentPending();
     this.pendingPurchaseStartedTimestamp = null;
     this.firstTimestampAfterPurchaseStarted = null;
+    this.pendingPurchaseSurfaceContext = null;
     this.scheduleFlush();
   }
 }
