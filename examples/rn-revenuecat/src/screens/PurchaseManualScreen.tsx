@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Text } from 'react-native';
-import type { PurchasesOffering, PurchasesStoreProduct } from 'react-native-purchases';
+import { Alert, StyleSheet, Text } from 'react-native';
+import type {
+  PurchasesOffering,
+  PurchasesStoreProduct,
+} from 'react-native-purchases';
 import { ActionButton } from '../components/ActionButton';
 import { DemoScreen } from '../components/DemoScreen';
 import { InfoCard } from '../components/InfoCard';
@@ -31,7 +34,7 @@ export function PurchaseManualScreen() {
   };
 
   useEffect(() => {
-    void refresh();
+    refresh().catch(() => {});
   }, []);
 
   return (
@@ -45,7 +48,13 @@ export function PurchaseManualScreen() {
       />
       <InfoCard
         title="Product Status"
-        body={`Current offering: ${offering?.identifier ?? 'not available'}\nProduct placeholder: ${demoConfig.revenueCatProductId}\nLoaded products: ${products.map((item) => item.identifier).join(', ') || 'none yet'}`}
+        body={`Current offering: ${
+          offering?.identifier ?? 'not available'
+        }\nProduct placeholder: ${
+          demoConfig.revenueCatProductId
+        }\nLoaded products: ${
+          products.map((item) => item.identifier).join(', ') || 'none yet'
+        }`}
       />
 
       <ActionButton
@@ -54,19 +63,19 @@ export function PurchaseManualScreen() {
         variant="ghost"
         onPress={() => {
           logDemoEvent('manual_reload_products');
-          void refresh();
+          refresh().catch(() => {});
         }}
       />
       <ActionButton
         label="Buy subscription"
         signalFoxId="manual_purchase_buy_product"
         onPress={() => {
-          void purchaseConfiguredProduct().catch((error) => {
+          purchaseConfiguredProduct().catch((error) => {
             logDemoEvent('manual_purchase_error', {
               message: error instanceof Error ? error.message : 'unknown',
             });
-              Alert.alert('Purchase failed', String(error));
-            });
+            Alert.alert('Purchase failed', String(error));
+          });
         }}
       />
       <ActionButton
@@ -74,7 +83,7 @@ export function PurchaseManualScreen() {
         signalFoxId="manual_purchase_restore_purchases"
         variant="secondary"
         onPress={() => {
-          void restoreRevenueCatPurchases()
+          restoreRevenueCatPurchases()
             .then((customerInfo) => {
               if (!customerInfo) {
                 return;
@@ -100,7 +109,7 @@ export function PurchaseManualScreen() {
           logDemoEvent('manual_idle_click');
         }}
       />
-      <Text style={{ color: '#5b6780', fontSize: 13, lineHeight: 20 }}>
+      <Text style={styles.helperText}>
         If you prefer to purchase from a package/offer, you can extend this
         screen with `purchasePackage()` using
         `offerings.current.availablePackages`.
@@ -108,3 +117,11 @@ export function PurchaseManualScreen() {
     </DemoScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  helperText: {
+    color: '#5b6780',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+});

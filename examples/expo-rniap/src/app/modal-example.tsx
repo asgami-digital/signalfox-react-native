@@ -45,7 +45,8 @@ export default function ModalExample() {
           <View style={styles.card}>
             <Text style={styles.title}>React Native Modal</Text>
             <Text style={styles.body}>
-              This modal mirrors the pattern used in the `rn-revenuecat` example.
+              This modal mirrors the pattern used in the `rn-revenuecat`
+              example.
             </Text>
             <ActionButton
               label="Show alert"

@@ -36,9 +36,7 @@ type ActivePatch = {
 };
 
 let activePatch: ActivePatch | null = null;
-const RN_IAP_PATCH_MARKER = Symbol.for(
-  'signalFox.reactNativeIapPatchApplied'
-);
+const RN_IAP_PATCH_MARKER = Symbol.for('signalFox.reactNativeIapPatchApplied');
 const RN_IAP_NITRO_REQUEST_PATCH_MARKER = Symbol.for(
   'signalFox.reactNativeIapNitroRequestPurchasePatched'
 );
@@ -60,7 +58,8 @@ function resolveReactNativeIapExport(value: unknown): PurchaseModule | null {
   debugLog('resolveReactNativeIapExport: checking root export', {
     hasUseIAP: typeof root.useIAP === 'function',
     hasRequestPurchase: typeof root.requestPurchase === 'function',
-    hasPurchaseUpdatedListener: typeof root.purchaseUpdatedListener === 'function',
+    hasPurchaseUpdatedListener:
+      typeof root.purchaseUpdatedListener === 'function',
     hasPurchaseErrorListener: typeof root.purchaseErrorListener === 'function',
     hasDefault: Boolean(root.default),
   });
@@ -77,7 +76,8 @@ function resolveReactNativeIapExport(value: unknown): PurchaseModule | null {
     debugLog('resolveReactNativeIapExport: checking default export', {
       hasUseIAP: typeof mod.useIAP === 'function',
       hasRequestPurchase: typeof mod.requestPurchase === 'function',
-      hasPurchaseUpdatedListener: typeof mod.purchaseUpdatedListener === 'function',
+      hasPurchaseUpdatedListener:
+        typeof mod.purchaseUpdatedListener === 'function',
       hasPurchaseErrorListener: typeof mod.purchaseErrorListener === 'function',
     });
     if (
@@ -159,7 +159,9 @@ function definePatchedExport(
   } catch {
     try {
       target[key] = patched;
-      debugLog('definePatchedExport: success via assignment after catch', { key });
+      debugLog('definePatchedExport: success via assignment after catch', {
+        key,
+      });
       return true;
     } catch (error) {
       console.warn('[SignalFox][react-native-iap] failed to patch method', {
@@ -302,7 +304,9 @@ function patchNitroCreateHybridObject(patch: ActivePatch): boolean {
       : nitroModules.createHybridObject;
 
   if (typeof original !== 'function') {
-    debugLog('patchNitroCreateHybridObject: createHybridObject is not callable');
+    debugLog(
+      'patchNitroCreateHybridObject: createHybridObject is not callable'
+    );
     return false;
   }
 
@@ -313,12 +317,11 @@ function patchNitroCreateHybridObject(patch: ActivePatch): boolean {
     const hybridObject = original.apply(this, args);
     const hybridObjectName = readString(args[0]);
     if (hybridObjectName === 'RnIap') {
-      const didPatchHybridObject = patchNitroRequestPurchaseIfNeeded(hybridObject);
+      const didPatchHybridObject =
+        patchNitroRequestPurchaseIfNeeded(hybridObject);
       const didPatchSyncIOS = patchNitroSyncIOSIfNeeded(hybridObject, patch);
-      const didPatchGetAvailablePurchases = patchNitroGetAvailablePurchasesIfNeeded(
-        hybridObject,
-        patch
-      );
+      const didPatchGetAvailablePurchases =
+        patchNitroGetAvailablePurchasesIfNeeded(hybridObject, patch);
       debugLog('patchNitroCreateHybridObject: RnIap hybrid object result', {
         didPatchHybridObject,
         didPatchSyncIOS,
@@ -381,19 +384,29 @@ function addFallbackListeners(
   debugLog('addFallbackListeners: evaluating', {
     patchPurchaseUpdatedListener,
     patchPurchaseErrorListener,
-    hasPurchaseUpdatedListener: typeof module.purchaseUpdatedListener === 'function',
-    hasPurchaseErrorListener: typeof module.purchaseErrorListener === 'function',
+    hasPurchaseUpdatedListener:
+      typeof module.purchaseUpdatedListener === 'function',
+    hasPurchaseErrorListener:
+      typeof module.purchaseErrorListener === 'function',
   });
 
-  if (!patchPurchaseUpdatedListener && typeof module.purchaseUpdatedListener === 'function') {
+  if (
+    !patchPurchaseUpdatedListener &&
+    typeof module.purchaseUpdatedListener === 'function'
+  ) {
     try {
-      const subscription = module.purchaseUpdatedListener((purchase: PurchaseLike) => {
-        const completedPayload = extractCompletedPayloadFromPurchase(purchase);
-        debugLog('fallback purchaseUpdatedListener event', completedPayload);
-        notifyPurchaseCompleted(completedPayload);
-      });
+      const subscription = module.purchaseUpdatedListener(
+        (purchase: PurchaseLike) => {
+          const completedPayload =
+            extractCompletedPayloadFromPurchase(purchase);
+          debugLog('fallback purchaseUpdatedListener event', completedPayload);
+          notifyPurchaseCompleted(completedPayload);
+        }
+      );
       subscriptions.push(wrapEventSubscription(subscription));
-      debugLog('addFallbackListeners: registered purchaseUpdatedListener fallback');
+      debugLog(
+        'addFallbackListeners: registered purchaseUpdatedListener fallback'
+      );
     } catch (error) {
       console.warn(
         '[SignalFox][react-native-iap] failed to register fallback purchaseUpdatedListener',
@@ -402,22 +415,29 @@ function addFallbackListeners(
     }
   }
 
-  if (!patchPurchaseErrorListener && typeof module.purchaseErrorListener === 'function') {
+  if (
+    !patchPurchaseErrorListener &&
+    typeof module.purchaseErrorListener === 'function'
+  ) {
     try {
-      const subscription = module.purchaseErrorListener((error: PurchaseErrorLike) => {
-        const errorPayload = extractErrorPayload(error);
-        debugLog('fallback purchaseErrorListener event', {
-          ...errorPayload,
-          isUserCancelled: isUserCancelled(module, error),
-        });
-        if (isUserCancelled(module, error)) {
-          notifyPurchaseCancelled(errorPayload);
-        } else {
-          notifyPurchaseFailed(errorPayload);
+      const subscription = module.purchaseErrorListener(
+        (error: PurchaseErrorLike) => {
+          const errorPayload = extractErrorPayload(error);
+          debugLog('fallback purchaseErrorListener event', {
+            ...errorPayload,
+            isUserCancelled: isUserCancelled(module, error),
+          });
+          if (isUserCancelled(module, error)) {
+            notifyPurchaseCancelled(errorPayload);
+          } else {
+            notifyPurchaseFailed(errorPayload);
+          }
         }
-      });
+      );
       subscriptions.push(wrapEventSubscription(subscription));
-      debugLog('addFallbackListeners: registered purchaseErrorListener fallback');
+      debugLog(
+        'addFallbackListeners: registered purchaseErrorListener fallback'
+      );
     } catch (error) {
       console.warn(
         '[SignalFox][react-native-iap] failed to register fallback purchaseErrorListener',
@@ -438,8 +458,10 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
   debugLog('patchOwnMethods: begin', {
     hasRequestPurchase: typeof module.requestPurchase === 'function',
     hasRequestSubscription: typeof module.requestSubscription === 'function',
-    hasPurchaseUpdatedListener: typeof module.purchaseUpdatedListener === 'function',
-    hasPurchaseErrorListener: typeof module.purchaseErrorListener === 'function',
+    hasPurchaseUpdatedListener:
+      typeof module.purchaseUpdatedListener === 'function',
+    hasPurchaseErrorListener:
+      typeof module.purchaseErrorListener === 'function',
     hasUseIAP: typeof module.useIAP === 'function',
   });
   if (typeof module.requestPurchase === 'function') {
@@ -480,10 +502,11 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
           this: unknown,
           request: unknown
         ) {
-          const startedPayload: Omit<NativePurchaseEventPayload, 'eventName'> = {
-            ...extractStartedPayloadFromRequest(request),
-            productType: 'subscription',
-          };
+          const startedPayload: Omit<NativePurchaseEventPayload, 'eventName'> =
+            {
+              ...extractStartedPayloadFromRequest(request),
+              productType: 'subscription',
+            };
           debugLog('requestSubscription() patched call', startedPayload);
           notifyPurchaseStarted(startedPayload);
           return await original.call(this, request);
@@ -509,7 +532,8 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
           listener: (purchase: PurchaseLike) => void
         ): EventSubscription {
           const subscription = original.call(this, (purchase: PurchaseLike) => {
-            const completedPayload = extractCompletedPayloadFromPurchase(purchase);
+            const completedPayload =
+              extractCompletedPayloadFromPurchase(purchase);
             debugLog('purchaseUpdatedListener event', completedPayload);
             notifyPurchaseCompleted(completedPayload);
             listener?.(purchase);
@@ -533,19 +557,22 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
           this: unknown,
           listener: (error: PurchaseErrorLike) => void
         ): EventSubscription {
-          const subscription = original.call(this, (error: PurchaseErrorLike) => {
-            const errorPayload = extractErrorPayload(error);
-            debugLog('purchaseErrorListener event', {
-              ...errorPayload,
-              isUserCancelled: isUserCancelled(module, error),
-            });
-            if (isUserCancelled(module, error)) {
-              notifyPurchaseCancelled(errorPayload);
-            } else {
-              notifyPurchaseFailed(errorPayload);
+          const subscription = original.call(
+            this,
+            (error: PurchaseErrorLike) => {
+              const errorPayload = extractErrorPayload(error);
+              debugLog('purchaseErrorListener event', {
+                ...errorPayload,
+                isUserCancelled: isUserCancelled(module, error),
+              });
+              if (isUserCancelled(module, error)) {
+                notifyPurchaseCancelled(errorPayload);
+              } else {
+                notifyPurchaseFailed(errorPayload);
+              }
+              listener?.(error);
             }
-            listener?.(error);
-          });
+          );
           return wrapEventSubscription(subscription);
         };
       }
@@ -559,17 +586,22 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
         const optionsRecord = asRecord(options) ?? {};
         const userOnPurchaseSuccess =
           typeof optionsRecord.onPurchaseSuccess === 'function'
-            ? (optionsRecord.onPurchaseSuccess as (purchase: PurchaseLike) => void)
+            ? (optionsRecord.onPurchaseSuccess as (
+                purchase: PurchaseLike
+              ) => void)
             : undefined;
         const userOnPurchaseError =
           typeof optionsRecord.onPurchaseError === 'function'
-            ? (optionsRecord.onPurchaseError as (error: PurchaseErrorLike) => void)
+            ? (optionsRecord.onPurchaseError as (
+                error: PurchaseErrorLike
+              ) => void)
             : undefined;
 
         const wrappedOptions = {
           ...optionsRecord,
           onPurchaseSuccess: (purchase: PurchaseLike) => {
-            const completedPayload = extractCompletedPayloadFromPurchase(purchase);
+            const completedPayload =
+              extractCompletedPayloadFromPurchase(purchase);
             debugLog('useIAP.onPurchaseSuccess event', completedPayload);
             notifyPurchaseCompleted(completedPayload);
             userOnPurchaseSuccess?.(purchase);
@@ -596,22 +628,27 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
 
         if (hookResult && typeof hookResult.requestPurchase === 'function') {
           const originalHookRequestPurchase = hookResult.requestPurchase;
-          hookResult.requestPurchase = async function patchedHookRequestPurchase(
-            this: unknown,
-            request: unknown
-          ) {
-            const startedPayload = extractStartedPayloadFromRequest(request);
-            debugLog('useIAP.requestPurchase() patched call', startedPayload);
-            notifyPurchaseStarted(startedPayload);
-            return await (originalHookRequestPurchase as Function).call(
-              this,
-              request
-            );
-          };
+          hookResult.requestPurchase =
+            async function patchedHookRequestPurchase(
+              this: unknown,
+              request: unknown
+            ) {
+              const startedPayload = extractStartedPayloadFromRequest(request);
+              debugLog('useIAP.requestPurchase() patched call', startedPayload);
+              notifyPurchaseStarted(startedPayload);
+              return await (originalHookRequestPurchase as Function).call(
+                this,
+                request
+              );
+            };
         }
 
-        if (hookResult && typeof hookResult.requestSubscription === 'function') {
-          const originalHookRequestSubscription = hookResult.requestSubscription;
+        if (
+          hookResult &&
+          typeof hookResult.requestSubscription === 'function'
+        ) {
+          const originalHookRequestSubscription =
+            hookResult.requestSubscription;
           hookResult.requestSubscription =
             async function patchedHookRequestSubscription(
               this: unknown,
@@ -641,13 +678,12 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
           hookResult.restorePurchases =
             async function patchedHookRestorePurchases(
               this: unknown,
-              options?: unknown
+              restoreOptions?: unknown
             ) {
               debugLog('useIAP.restorePurchases() patched call');
-              const result = await (originalHookRestorePurchases as Function).call(
-                this,
-                options
-              );
+              const result = await (
+                originalHookRestorePurchases as Function
+              ).call(this, restoreOptions);
               const restorePayload = extractRestorePayload(
                 Array.isArray(hookResult.availablePurchases)
                   ? hookResult.availablePurchases
@@ -662,7 +698,9 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
         return hookResult;
       };
     });
-    debugLog('patchOwnMethods: useIAP patch result', { patched: didPatchUseIAP });
+    debugLog('patchOwnMethods: useIAP patch result', {
+      patched: didPatchUseIAP,
+    });
   }
 
   const didPatchNitroCreateHybridObject =
@@ -732,11 +770,15 @@ function startReactNativeIapPurchaseAnalytics(module: PurchaseModule): void {
     return;
   }
   if (activePatch) {
-    debugLog('startReactNativeIapPurchaseAnalytics: replacing existing active patch');
+    debugLog(
+      'startReactNativeIapPurchaseAnalytics: replacing existing active patch'
+    );
     stopReactNativeIapPurchaseAnalytics();
   }
   if ((module as any)[RN_IAP_PATCH_MARKER]) {
-    debugLog('startReactNativeIapPurchaseAnalytics: marker already present, skipping');
+    debugLog(
+      'startReactNativeIapPurchaseAnalytics: marker already present, skipping'
+    );
     return;
   }
 
@@ -751,7 +793,9 @@ function startReactNativeIapPurchaseAnalytics(module: PurchaseModule): void {
   };
   activePatch = patch;
   (module as any)[RN_IAP_PATCH_MARKER] = true;
-  debugLog('startReactNativeIapPurchaseAnalytics: marker set, patching methods');
+  debugLog(
+    'startReactNativeIapPurchaseAnalytics: marker set, patching methods'
+  );
 
   patchOwnMethods(module, patch);
 }
@@ -787,7 +831,9 @@ function isSubscriptionType(value: unknown): boolean {
   return type === 'subs' || type === 'subscription';
 }
 
-function inferStoreFromRequest(request: RequestLike): 'app_store' | 'google_play' {
+function inferStoreFromRequest(
+  request: RequestLike
+): 'app_store' | 'google_play' {
   const req = asRecord(request.request);
   if (req?.apple || req?.ios) return 'app_store';
   if (req?.google || req?.android) return 'google_play';
@@ -838,7 +884,9 @@ function inferStoreFromNitroRequest(
   return Platform.OS === 'ios' ? 'app_store' : 'google_play';
 }
 
-function inferProductIdFromNitroRequest(request: RequestLike): string | undefined {
+function inferProductIdFromNitroRequest(
+  request: RequestLike
+): string | undefined {
   const ios = asRecord(request.ios);
   const android = asRecord(request.android);
   return pickFirstString([
@@ -872,16 +920,16 @@ function extractCompletedPayloadFromPurchase(
   ]);
 
   return {
-    ...(readString(obj.productId) ? { productId: readString(obj.productId) } : {}),
+    ...(readString(obj.productId)
+      ? { productId: readString(obj.productId) }
+      : {}),
     ...(transactionId ? { transactionId } : {}),
     store: Platform.OS === 'ios' ? 'app_store' : 'google_play',
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
   };
 }
 
-function extractRestorePayload(
-  purchases?: unknown
-): Record<string, unknown> {
+function extractRestorePayload(purchases?: unknown): Record<string, unknown> {
   const restoredProductIds = Array.isArray(purchases)
     ? purchases
         .map((purchase) => readString(asRecord(purchase)?.productId))
@@ -898,9 +946,13 @@ function extractRestorePayload(
 function extractErrorPayload(error: unknown): Record<string, unknown> {
   const obj = asRecord(error) ?? {};
   return {
-    ...(readString(obj.productId) ? { productId: readString(obj.productId) } : {}),
+    ...(readString(obj.productId)
+      ? { productId: readString(obj.productId) }
+      : {}),
     ...(readString(obj.code) ? { errorCode: readString(obj.code) } : {}),
-    ...(readString(obj.message) ? { errorMessage: readString(obj.message) } : {}),
+    ...(readString(obj.message)
+      ? { errorMessage: readString(obj.message) }
+      : {}),
     store: Platform.OS === 'ios' ? 'app_store' : 'google_play',
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
   };

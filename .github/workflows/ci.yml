@@ -62,6 +62,8 @@ jobs:
 
     env:
       TURBO_CACHE_DIR: .turbo/android
+      EXAMPLE_WORKSPACE: "@asgami/signalfox-rn-revenuecat"
+      EXAMPLE_DIR: examples/rn-revenuecat
 
     steps:
       - name: Checkout
@@ -80,7 +82,7 @@ jobs:
 
       - name: Check turborepo cache for Android
         run: |
-          TURBO_CACHE_STATUS=$(node -p "($(yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}" --dry=json)).tasks.find(t => t.task === 'build:android').cache.status")
+          TURBO_CACHE_STATUS=$(node -p "($(yarn turbo run build:android --filter='${{ env.EXAMPLE_WORKSPACE }}' --cache-dir='${{ env.TURBO_CACHE_DIR }}' --dry=json)).tasks.find(t => t.taskId === '${{ env.EXAMPLE_WORKSPACE }}#build:android').cache.status")
 
           if [[ $TURBO_CACHE_STATUS == "HIT" ]]; then
             echo "turbo_cache_hit=1" >> $GITHUB_ENV
@@ -106,15 +108,15 @@ jobs:
           path: |
             ~/.gradle/wrapper
             ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('example/android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('examples/rn-revenuecat/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build example for Android
+      - name: Build React Native example for Android
         env:
           JAVA_OPTS: "-XX:MaxHeapSize=6g"
         run: |
-          yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
+          yarn turbo run build:android --filter='${{ env.EXAMPLE_WORKSPACE }}' --cache-dir='${{ env.TURBO_CACHE_DIR }}'
 
   build-ios:
     runs-on: macos-latest
@@ -122,6 +124,8 @@ jobs:
     env:
       XCODE_VERSION: 26
       TURBO_CACHE_DIR: .turbo/ios
+      EXAMPLE_WORKSPACE: "@asgami/signalfox-rn-revenuecat"
+      EXAMPLE_DIR: examples/rn-revenuecat
       RCT_USE_RN_DEP: 1
       RCT_USE_PREBUILT_RNCORE: 1
 
@@ -142,7 +146,7 @@ jobs:
 
       - name: Check turborepo cache for iOS
         run: |
-          TURBO_CACHE_STATUS=$(node -p "($(yarn turbo run build:ios --cache-dir="${{ env.TURBO_CACHE_DIR }}" --dry=json)).tasks.find(t => t.task === 'build:ios').cache.status")
+          TURBO_CACHE_STATUS=$(node -p "($(yarn turbo run build:ios --filter='${{ env.EXAMPLE_WORKSPACE }}' --cache-dir='${{ env.TURBO_CACHE_DIR }}' --dry=json)).tasks.find(t => t.taskId === '${{ env.EXAMPLE_WORKSPACE }}#build:ios').cache.status")
 
           if [[ $TURBO_CACHE_STATUS == "HIT" ]]; then
             echo "turbo_cache_hit=1" >> $GITHUB_ENV
@@ -155,13 +159,26 @@ jobs:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install cocoapods
-        if: env.turbo_cache_hit != 1 && steps.cocoapods-cache.outputs.cache-hit != 'true'
+        if: env.turbo_cache_hit != 1
         run: |
-          cd example
+          cd ${{ env.EXAMPLE_DIR }}
           bundle install
           bundle exec pod repo update --verbose
           bundle exec pod install --project-directory=ios
 
-      - name: Build example for iOS
+      - name: Build React Native example for iOS
         run: |
-          yarn turbo run build:ios --cache-dir="${{ env.TURBO_CACHE_DIR }}"
+          yarn turbo run build:ios --filter='${{ env.EXAMPLE_WORKSPACE }}' --cache-dir='${{ env.TURBO_CACHE_DIR }}'
+
+  validate-expo-example:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Validate Expo native project generation
+        run: yarn workspace expo-rniap prebuild --no-install

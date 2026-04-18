@@ -194,7 +194,8 @@ describe('AnalyticsCore navigation intent buffer', () => {
     jest.advanceTimersByTime(Math.floor(NAVIGATION_INTENT_BUFFER_MAX_MS / 2));
     core.markNavigationIntentPending();
     jest.advanceTimersByTime(
-      NAVIGATION_INTENT_BUFFER_MAX_MS - Math.floor(NAVIGATION_INTENT_BUFFER_MAX_MS / 2)
+      NAVIGATION_INTENT_BUFFER_MAX_MS -
+        Math.floor(NAVIGATION_INTENT_BUFFER_MAX_MS / 2)
     );
     await core.flush();
 

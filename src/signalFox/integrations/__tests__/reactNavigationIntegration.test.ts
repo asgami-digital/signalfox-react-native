@@ -1,4 +1,8 @@
-import { modalStackPush, resetModalStack, getModalStackSnapshot } from '../../core/modalStack';
+import {
+  modalStackPush,
+  resetModalStack,
+  getModalStackSnapshot,
+} from '../../core/modalStack';
 import {
   reactNavigationIntegration,
   type NavigationRefLike,
@@ -6,10 +10,20 @@ import {
 } from '../reactNavigationIntegration';
 import type { ExpoRouterIntegrationOptions } from '../expoRouterIntegration';
 
-// @ts-expect-error getRoutePresentation fue eliminado de la API publica
-type RemovedReactNavigationGetter = ReactNavigationIntegrationOptions['getRoutePresentation'];
-// @ts-expect-error getRoutePresentation fue eliminado de la API publica
-type RemovedExpoRouterGetter = ExpoRouterIntegrationOptions['getRoutePresentation'];
+function expectTypeToBeTrue<T extends true>(value: T) {
+  expect(value).toBe(true);
+}
+
+expectTypeToBeTrue<
+  'getRoutePresentation' extends keyof ReactNavigationIntegrationOptions
+    ? false
+    : true
+>(true);
+expectTypeToBeTrue<
+  'getRoutePresentation' extends keyof ExpoRouterIntegrationOptions
+    ? false
+    : true
+>(true);
 
 type ListenerMap = Record<string, Array<(event?: unknown) => void>>;
 
@@ -17,7 +31,10 @@ type NavigationHarness = {
   emit(eventName: string, event?: unknown): void;
   navigationRef: NavigationRefLike & {
     current: NonNullable<NavigationRefLike['current']> & {
-      addListener: (eventName: string, listener: (event?: unknown) => void) => () => void;
+      addListener: (
+        eventName: string,
+        listener: (event?: unknown) => void
+      ) => () => void;
     };
   };
   optionsRef: { current: unknown };
@@ -153,7 +170,10 @@ describe('reactNavigationIntegration', () => {
       }),
     ]);
 
-    const screenViewsAfterOpen = getEventsByType(core.trackEvent, 'screen_view');
+    const screenViewsAfterOpen = getEventsByType(
+      core.trackEvent,
+      'screen_view'
+    );
     expect(screenViewsAfterOpen[1]).toEqual(
       expect.objectContaining({
         payload: expect.objectContaining({

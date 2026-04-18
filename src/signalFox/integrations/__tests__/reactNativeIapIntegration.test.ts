@@ -36,12 +36,13 @@ describe('reactNativeIapIntegration', () => {
       reactNativeIap: reactNativeIapModule,
     });
 
-    expect(integration.name).toBe(
-      REACT_NATIVE_IAP_ANALYTICS_INTEGRATION_NAME
-    );
+    expect(integration.name).toBe(REACT_NATIVE_IAP_ANALYTICS_INTEGRATION_NAME);
 
     const cleanup = integration.setup(core as any);
-    const hookResult = reactNativeIapModule.useIAP({}) as Record<string, unknown>;
+    const hookResult = reactNativeIapModule.useIAP({}) as Record<
+      string,
+      unknown
+    >;
 
     await (hookResult.requestPurchase as Function)({
       request: { apple: { sku: 'pro_monthly' } },
@@ -158,10 +159,9 @@ describe('reactNativeIapIntegration', () => {
       enumerable: true,
       get: () =>
         jest.fn(async () => {
-          const hybridObject = nitroModules.createHybridObject('RnIap') as Record<
-            string,
-            unknown
-          >;
+          const hybridObject = nitroModules.createHybridObject(
+            'RnIap'
+          ) as Record<string, unknown>;
           await (hybridObject.requestPurchase as Function)({
             ios: { sku: 'pro_monthly' },
           });
@@ -174,10 +174,9 @@ describe('reactNativeIapIntegration', () => {
       get: () =>
         jest.fn(() => ({
           requestPurchase: async () => {
-            const hybridObject = nitroModules.createHybridObject('RnIap') as Record<
-              string,
-              unknown
-            >;
+            const hybridObject = nitroModules.createHybridObject(
+              'RnIap'
+            ) as Record<string, unknown>;
             await (hybridObject.requestPurchase as Function)({
               ios: { sku: 'pro_monthly' },
             });
@@ -279,10 +278,9 @@ describe('reactNativeIapIntegration', () => {
       get: () =>
         jest.fn(() => ({
           restorePurchases: async () => {
-            const hybridObject = nitroModules.createHybridObject('RnIap') as Record<
-              string,
-              unknown
-            >;
+            const hybridObject = nitroModules.createHybridObject(
+              'RnIap'
+            ) as Record<string, unknown>;
             await (hybridObject.syncIOS as Function)();
             await (hybridObject.getAvailablePurchases as Function)({
               alsoPublishToEventListenerIOS: false,
@@ -310,7 +308,8 @@ describe('reactNativeIapIntegration', () => {
       get: () => purchaseErrorListener,
     });
 
-    const { reactNativeIapIntegration: freshReactNativeIapIntegration } = require('../reactNativeIapIntegration') as typeof import('../reactNativeIapIntegration');
+    const { reactNativeIapIntegration: freshReactNativeIapIntegration } =
+      require('../reactNativeIapIntegration') as typeof import('../reactNativeIapIntegration');
 
     const core = {
       flush: jest.fn(),

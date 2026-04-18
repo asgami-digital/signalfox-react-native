@@ -196,7 +196,9 @@ describe('AnalyticsCore purchase flow timestamps', () => {
       parent_modal?: string | null;
     }>;
 
-    const firstStarted = events.find((e) => e.event_name === 'purchase_started');
+    const firstStarted = events.find(
+      (e) => e.event_name === 'purchase_started'
+    );
     const completed = events.find((e) => e.event_name === 'purchase_completed');
     expect(firstStarted?.screen_name).toBe('PaywallHost');
     expect(firstStarted?.parent_modal).toBe('revenuecat-paywall');

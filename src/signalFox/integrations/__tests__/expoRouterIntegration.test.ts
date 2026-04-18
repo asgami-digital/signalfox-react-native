@@ -11,7 +11,10 @@ function createNavigationRef(
 ) {
   const listeners: ListenerMap = {};
 
-  const addListener = (eventName: string, listener: (event?: unknown) => void) => {
+  const addListener = (
+    eventName: string,
+    listener: (event?: unknown) => void
+  ) => {
     listeners[eventName] ??= [];
     listeners[eventName].push(listener);
     return () => {
@@ -42,9 +45,7 @@ function createNavigationRef(
 
 describe('expoRouterIntegration', () => {
   it('usa la logica de React Navigation y emite screen_view con intent timestamp', () => {
-    jest.spyOn(Date, 'now')
-      .mockReturnValueOnce(1000)
-      .mockReturnValueOnce(2000);
+    jest.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(2000);
 
     const stateRef = {
       current: {
@@ -86,7 +87,9 @@ describe('expoRouterIntegration', () => {
       ],
     };
 
-    navigation.emit('__unsafe_action__', { data: { action: { type: 'NAVIGATE' } } });
+    navigation.emit('__unsafe_action__', {
+      data: { action: { type: 'NAVIGATE' } },
+    });
     navigation.emit('state');
 
     expect(core.trackEvent).toHaveBeenNthCalledWith(

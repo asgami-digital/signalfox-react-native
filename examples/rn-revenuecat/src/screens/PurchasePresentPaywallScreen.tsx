@@ -37,7 +37,9 @@ export function PurchasePresentPaywallScreen() {
     >
       <InfoCard
         title="Current Status"
-        body={`Current offering: ${offering?.identifier ?? 'no offering'}\nEntitlement placeholder: ${demoConfig.revenueCatEntitlementId}`}
+        body={`Current offering: ${
+          offering?.identifier ?? 'no offering'
+        }\nEntitlement placeholder: ${demoConfig.revenueCatEntitlementId}`}
       />
 
       <ActionButton

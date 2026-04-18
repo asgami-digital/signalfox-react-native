@@ -180,9 +180,9 @@ export function ingestNativePurchaseChannelPayload(
 }
 
 export function notifyPurchaseStarted(
-  payload: (Omit<NativePurchaseEventPayload, 'eventName'> & {
+  payload: Omit<NativePurchaseEventPayload, 'eventName'> & {
     timestamp?: number;
-  })
+  }
 ): void {
   setPendingPurchaseProductId((payload as { productId?: string }).productId);
 
@@ -268,7 +268,8 @@ export function notifyPurchaseCompleted(
     return;
   }
 
-  const normalized = normalizeNativePurchaseEventToAnalyticsEvent(completedPayload);
+  const normalized =
+    normalizeNativePurchaseEventToAnalyticsEvent(completedPayload);
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
   activeCore.trackEvent(coreEvent as any);
@@ -291,7 +292,8 @@ export function notifyRestoreCompleted(
     return;
   }
 
-  const normalized = normalizeNativePurchaseEventToAnalyticsEvent(restorePayload);
+  const normalized =
+    normalizeNativePurchaseEventToAnalyticsEvent(restorePayload);
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
   activeCore.trackEvent(coreEvent as any);
@@ -304,8 +306,7 @@ export function notifyModalOpened(
 ): void {
   if (!activeCore) return;
 
-  const trimmedTargetId =
-    typeof targetId === 'string' ? targetId.trim() : '';
+  const trimmedTargetId = typeof targetId === 'string' ? targetId.trim() : '';
   if (!trimmedTargetId) return;
 
   activeCore.trackEvent({
@@ -333,8 +334,7 @@ export function notifyModalClosed(
 ): void {
   if (!activeCore) return;
 
-  const trimmedTargetId =
-    typeof targetId === 'string' ? targetId.trim() : '';
+  const trimmedTargetId = typeof targetId === 'string' ? targetId.trim() : '';
   if (!trimmedTargetId) return;
 
   activeCore.trackEvent({

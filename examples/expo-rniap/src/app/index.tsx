@@ -17,7 +17,11 @@ export default function HomeScreen() {
     >
       <InfoCard
         title="Quick Status"
-        body={`SignalFox API key: ${hasSignalFoxApiKey() ? 'configured' : 'log-only placeholder'}\nSubscription SKU: ${isActiveSubscriptionSkuConfigured() ? 'configured' : 'pending'}\nNote: ${demoConfig.storeNotes}`}
+        body={`SignalFox API key: ${
+          hasSignalFoxApiKey() ? 'configured' : 'log-only placeholder'
+        }\nSubscription SKU: ${
+          isActiveSubscriptionSkuConfigured() ? 'configured' : 'pending'
+        }\nNote: ${demoConfig.storeNotes}`}
       />
 
       <ActionButton

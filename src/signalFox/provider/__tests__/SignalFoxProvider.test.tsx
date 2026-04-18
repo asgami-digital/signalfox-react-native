@@ -81,7 +81,10 @@ describe('SignalFoxProvider internal integrations', () => {
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
       renderer = TestRenderer.create(
-        <SignalFoxProvider apiKey="ak_dev__test" integrations={[customIntegration]}>
+        <SignalFoxProvider
+          apiKey="ak_dev__test"
+          integrations={[customIntegration]}
+        >
           <></>
         </SignalFoxProvider>
       );

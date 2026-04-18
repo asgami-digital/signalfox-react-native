@@ -74,7 +74,8 @@ describe('revenueCatPurchaseAnalytics', () => {
     class RevenueCatUI {}
     (RevenueCatUI as any).presentPaywall = presentPaywall;
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: {},
       revenueCatUI: RevenueCatUI,
@@ -137,7 +138,8 @@ describe('revenueCatPurchaseAnalytics', () => {
       Paywall: React.ComponentType<Record<string, unknown>>;
     };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: {},
       revenueCatUI: RevenueCatUI,
@@ -216,7 +218,8 @@ describe('revenueCatPurchaseAnalytics', () => {
       Paywall: React.ComponentType<Record<string, unknown>>;
     };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
       revenueCatUI: RevenueCatUI,
@@ -368,7 +371,8 @@ describe('revenueCatPurchaseAnalytics', () => {
 
     const Purchases = { purchaseProduct };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
     });
@@ -441,7 +445,8 @@ describe('revenueCatPurchaseAnalytics', () => {
     class RevenueCatUI {}
     (RevenueCatUI as any).presentPaywall = presentPaywall;
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: {},
       revenueCatUI: RevenueCatUI,
@@ -459,8 +464,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       })
     );
     const modalCloseOrder = notifyModalClosed.mock.invocationCallOrder[0] ?? 0;
-    const startedOrder =
-      notifyPurchaseStarted.mock.invocationCallOrder[0] ?? 0;
+    const startedOrder = notifyPurchaseStarted.mock.invocationCallOrder[0] ?? 0;
     expect(startedOrder).toBeGreaterThan(modalCloseOrder);
 
     analyticsModule.stopRevenueCatPurchaseAnalyticsIfAvailable();
@@ -518,7 +522,8 @@ describe('revenueCatPurchaseAnalytics', () => {
       { virtual: false }
     );
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
       revenueCatUI: RevenueCatUI,
@@ -560,7 +565,9 @@ describe('revenueCatPurchaseAnalytics', () => {
     const endHeuristicPaywallSession = jest.fn(() =>
       Promise.resolve({ sawInactiveDuringPaywall: false })
     );
-    const presentPaywallIfNeeded = jest.fn(() => Promise.resolve('NOT_PRESENTED'));
+    const presentPaywallIfNeeded = jest.fn(() =>
+      Promise.resolve('NOT_PRESENTED')
+    );
 
     jest.doMock('react-native', () => ({
       Platform: { OS: 'ios' },
@@ -589,7 +596,8 @@ describe('revenueCatPurchaseAnalytics', () => {
     class RevenueCatUI {}
     (RevenueCatUI as any).presentPaywallIfNeeded = presentPaywallIfNeeded;
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: {},
       revenueCatUI: RevenueCatUI,
@@ -649,7 +657,8 @@ describe('revenueCatPurchaseAnalytics', () => {
     };
     const Purchases = { purchasePackage };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
     });
@@ -701,7 +710,8 @@ describe('revenueCatPurchaseAnalytics', () => {
 
     const Purchases = { purchaseProduct };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
     });
@@ -763,7 +773,8 @@ describe('revenueCatPurchaseAnalytics', () => {
 
     const Purchases = { purchaseProduct };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
     });
@@ -821,7 +832,8 @@ describe('revenueCatPurchaseAnalytics', () => {
 
     const Purchases = { restorePurchases };
 
-    const analyticsModule = require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
     analyticsModule.startRevenueCatPurchaseAnalytics({
       purchases: Purchases,
     });

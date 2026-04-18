@@ -13,6 +13,7 @@ export function sortIntegrationsForSetup(
     return 2;
   };
   return [...list].sort(
-    (a, b) => priority(a.name) - priority(b.name) || a.name.localeCompare(b.name)
+    (a, b) =>
+      priority(a.name) - priority(b.name) || a.name.localeCompare(b.name)
   );
 }

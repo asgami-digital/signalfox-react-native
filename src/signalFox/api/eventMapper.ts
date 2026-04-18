@@ -218,7 +218,8 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     case 'component_press': {
       base.screen_name = pickOptionalString(raw.screen_name);
       base.target_id =
-        pickOptionalString(raw.signalFoxId) ?? pickOptionalString(raw.target_id);
+        pickOptionalString(raw.signalFoxId) ??
+        pickOptionalString(raw.target_id);
       base.target_name =
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name);
@@ -233,7 +234,8 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
         pickOptionalString(raw.step_name) ??
         pickOptionalString(raw.signalFoxId);
       base.target_id =
-        pickOptionalString(raw.signalFoxId) ?? pickOptionalString(raw.target_id);
+        pickOptionalString(raw.signalFoxId) ??
+        pickOptionalString(raw.target_id);
       base.target_name =
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name) ??

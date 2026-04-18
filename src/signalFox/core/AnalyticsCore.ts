@@ -112,16 +112,15 @@ function buildGenericSignalFoxId(params: {
   explicitSignalFoxId: string | null;
   stepName: string | null;
 }): string | null {
-  const {
-    family,
-    screenName,
-    eventType,
-    explicitSignalFoxId,
-    stepName,
-  } = params;
+  const { family, screenName, eventType, explicitSignalFoxId, stepName } =
+    params;
   console.log('buildGenericSignalFoxId', params);
 
-  if( explicitSignalFoxId && typeof explicitSignalFoxId === 'string' && explicitSignalFoxId.trim().length > 0) {
+  if (
+    explicitSignalFoxId &&
+    typeof explicitSignalFoxId === 'string' &&
+    explicitSignalFoxId.trim().length > 0
+  ) {
     return explicitSignalFoxId.trim();
   }
 
@@ -133,13 +132,10 @@ function buildGenericSignalFoxId(params: {
     return trimOptionalString(eventType) ?? 'unknown';
   }
 
-  if (family === EventFamily.Flow ) {
-    return (
-      trimOptionalString(stepName) ??
-      'unknown'
-    );
+  if (family === EventFamily.Flow) {
+    return trimOptionalString(stepName) ?? 'unknown';
   }
-  
+
   return null;
 }
 
@@ -150,14 +146,17 @@ function buildGenericDisplayName(params: {
   fallbackId: string | null;
   customEventName: string | null;
 }): string {
-  const { eventType, screenName, payload, fallbackId, customEventName } = params;
+  const { eventType, screenName, payload, fallbackId, customEventName } =
+    params;
   const payloadDisplay = trimOptionalString(payload.analyticsDisplayName);
   if (payloadDisplay) {
     return payloadDisplay;
   }
 
   const namedModal =
-    trimOptionalString(payload.paywall_name) ?? trimOptionalString(payload.modalName) ?? fallbackId;
+    trimOptionalString(payload.paywall_name) ??
+    trimOptionalString(payload.modalName) ??
+    fallbackId;
 
   switch (eventType) {
     case 'app_open':
@@ -544,14 +543,18 @@ export class AnalyticsCore implements IAnalyticsCore {
     }
     const family = getCanonicalTriple(event.type).event_family;
     const explicitSignalFoxId =
-      this.pickOptionalString((event as { signalFoxId?: unknown }).signalFoxId) ??
+      this.pickOptionalString(
+        (event as { signalFoxId?: unknown }).signalFoxId
+      ) ??
       this.pickOptionalString((event as { target_id?: unknown }).target_id);
     const explicitSignalFoxDisplayName =
       this.pickOptionalString(
         (event as { signalFoxDisplayName?: unknown }).signalFoxDisplayName
       ) ??
       this.pickOptionalString((event as { target_name?: unknown }).target_name);
-    const usesOnlyExplicitIdentifiers = usesExplicitUiIdentifiersOnly(event.type);
+    const usesOnlyExplicitIdentifiers = usesExplicitUiIdentifiersOnly(
+      event.type
+    );
     const signalFoxIdComputed =
       explicitSignalFoxId ??
       (usesOnlyExplicitIdentifiers

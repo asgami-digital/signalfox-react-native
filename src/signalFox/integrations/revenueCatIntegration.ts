@@ -72,7 +72,8 @@ export function revenueCatIntegration(
       registerPurchaseAnalyticsCore(core);
 
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        const hasPkg = purchases && typeof purchases.purchasePackage === 'function';
+        const hasPkg =
+          purchases && typeof purchases.purchasePackage === 'function';
         console.log('[SignalFox][RevenueCat] revenueCatIntegration.setup()', {
           resolvedPurchases: Boolean(purchases),
           hasPurchasePackage: hasPkg,

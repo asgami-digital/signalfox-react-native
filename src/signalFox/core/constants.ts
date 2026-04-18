@@ -78,8 +78,7 @@ export function computePurchaseTerminalAdjustedTimestamp(
   if (firstInterveningTs <= startedTs) {
     return startedTs;
   }
-  const candidate =
-    firstInterveningTs - PURCHASE_TERMINAL_TIMESTAMP_OFFSET_MS;
+  const candidate = firstInterveningTs - PURCHASE_TERMINAL_TIMESTAMP_OFFSET_MS;
   if (candidate > startedTs) {
     return candidate;
   }

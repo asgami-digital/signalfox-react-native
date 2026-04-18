@@ -36,7 +36,10 @@ let heuristicPaywallState: {
   sawPurchaseTerminalDuringPaywall: false,
 };
 
-function openRevenueCatPaywallSource(trigger: string, timestamp?: number): void {
+function openRevenueCatPaywallSource(
+  trigger: string,
+  timestamp?: number
+): void {
   const shouldEmitOpen = activeRevenueCatPaywallSources === 0;
   activeRevenueCatPaywallSources += 1;
 
@@ -44,14 +47,21 @@ function openRevenueCatPaywallSource(trigger: string, timestamp?: number): void 
     return;
   }
 
-  notifyModalOpened(REVENUECAT_PAYWALL_MODAL_NAME, {
-    provider: 'revenuecat',
-    trigger,
-    paywall_name: REVENUECAT_PAYWALL_MODAL_NAME,
-  }, timestamp);
+  notifyModalOpened(
+    REVENUECAT_PAYWALL_MODAL_NAME,
+    {
+      provider: 'revenuecat',
+      trigger,
+      paywall_name: REVENUECAT_PAYWALL_MODAL_NAME,
+    },
+    timestamp
+  );
 }
 
-function closeRevenueCatPaywallSource(trigger: string, timestamp?: number): void {
+function closeRevenueCatPaywallSource(
+  trigger: string,
+  timestamp?: number
+): void {
   if (activeRevenueCatPaywallSources <= 0) {
     return;
   }
@@ -61,11 +71,15 @@ function closeRevenueCatPaywallSource(trigger: string, timestamp?: number): void
     return;
   }
 
-  notifyModalClosed(REVENUECAT_PAYWALL_MODAL_NAME, {
-    provider: 'revenuecat',
-    trigger,
-    paywall_name: REVENUECAT_PAYWALL_MODAL_NAME,
-  }, timestamp);
+  notifyModalClosed(
+    REVENUECAT_PAYWALL_MODAL_NAME,
+    {
+      provider: 'revenuecat',
+      trigger,
+      paywall_name: REVENUECAT_PAYWALL_MODAL_NAME,
+    },
+    timestamp
+  );
 }
 
 function resetHeuristicPaywallState(): void {
@@ -284,22 +298,22 @@ function pickString(...values: unknown[]): string | undefined {
 }
 
 function pickFiniteNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 /**
  * `PurchasesStoreProduct`, objeto `Price` de fases de suscripción (amountMicros), o campos legacy Android.
  */
-function extractPriceCurrencyFromProductLike(
-  raw: unknown
-): { price?: number; currency?: string } {
+function extractPriceCurrencyFromProductLike(raw: unknown): {
+  price?: number;
+  currency?: string;
+} {
   const o = asRecord(raw);
   if (!o) return {};
 
-  if (
-    typeof o.amountMicros === 'number' &&
-    Number.isFinite(o.amountMicros)
-  ) {
+  if (typeof o.amountMicros === 'number' && Number.isFinite(o.amountMicros)) {
     const currency = pickString(o.currencyCode);
     return {
       price: o.amountMicros / 1_000_000,
@@ -308,15 +322,10 @@ function extractPriceCurrencyFromProductLike(
   }
 
   const micros = pickFiniteNumber(o.priceAmountMicros);
-  const fromMicros =
-    micros != null ? micros / 1_000_000 : undefined;
+  const fromMicros = micros != null ? micros / 1_000_000 : undefined;
 
   const price = pickFiniteNumber(o.price) ?? fromMicros;
-  const currency = pickString(
-    o.currencyCode,
-    o.currency,
-    o.priceCurrencyCode
-  );
+  const currency = pickString(o.currencyCode, o.currency, o.priceCurrencyCode);
 
   const out: { price?: number; currency?: string } = {};
   if (price != null && Number.isFinite(price)) out.price = price;
@@ -346,7 +355,10 @@ function inferPriceCurrencyFromPurchaseContext(
 
   const fromArgs = (): { price?: number; currency?: string } => {
     const a0 = args[0];
-    if (method === 'purchasePackage' || method === 'purchaseDiscountedPackage') {
+    if (
+      method === 'purchasePackage' ||
+      method === 'purchaseDiscountedPackage'
+    ) {
       const pkg = asRecord(a0);
       return extractPriceCurrencyFromProductLike(
         pkg?.product ?? pkg?.storeProduct
@@ -443,7 +455,9 @@ function defaultPaywallPurchaseContext(): {
 }
 
 /** Evento nativo de `onPurchaseStarted` (`{ packageBeingPurchased }`). */
-function productIdFromPaywallPurchaseStartedEvent(event: unknown): string | undefined {
+function productIdFromPaywallPurchaseStartedEvent(
+  event: unknown
+): string | undefined {
   const rec = asRecord(event);
   const pkg = asRecord(rec?.packageBeingPurchased);
   if (pkg) {
@@ -452,9 +466,10 @@ function productIdFromPaywallPurchaseStartedEvent(event: unknown): string | unde
   return undefined;
 }
 
-function inferPriceCurrencyFromPaywallCompletedEvent(
-  event: unknown
-): { price?: number; currency?: string } {
+function inferPriceCurrencyFromPaywallCompletedEvent(event: unknown): {
+  price?: number;
+  currency?: string;
+} {
   const r = asRecord(event);
   if (!r) return {};
   for (const raw of [
@@ -514,7 +529,8 @@ function buildPaywallPurchaseAnalyticsProps(
     props.onPurchaseCompleted,
     (event: unknown) => {
       const fallbackId = productIdFromPaywallPurchaseStartedEvent(event);
-      const { price, currency } = inferPriceCurrencyFromPaywallCompletedEvent(event);
+      const { price, currency } =
+        inferPriceCurrencyFromPaywallCompletedEvent(event);
       markHeuristicPaywallPurchaseTerminalSeen();
       notifyPurchaseCompleted({
         productId: inferProductIdFromResult(event, fallbackId),
@@ -714,7 +730,9 @@ function installRevenueCatPaywallHooks(
       await beginHeuristicPaywallSession(openedAt);
 
       try {
-        const result = await Promise.resolve(original.apply(RevenueCatUI, args));
+        const result = await Promise.resolve(
+          original.apply(RevenueCatUI, args)
+        );
         await finalizeHeuristicPaywallSession({
           method: name,
           result,
@@ -737,10 +755,9 @@ function installRevenueCatPaywallHooks(
   const OriginalPaywall = RevenueCatUI.Paywall;
   if (typeof OriginalPaywall === 'function') {
     restoreEntries.push(['Paywall', OriginalPaywall]);
-    RevenueCatUI.Paywall = class SignalFoxRevenueCatPaywall extends React.Component<Record<
-      string,
-      unknown
-    >> {
+    RevenueCatUI.Paywall = class SignalFoxRevenueCatPaywall extends (
+      React.Component
+    )<Record<string, unknown>> {
       private isTrackingOpen = false;
 
       componentDidMount(): void {
@@ -801,8 +818,7 @@ export type StartRevenueCatPurchaseAnalyticsOptions = {
 
 function isPurchasesModule(value: unknown): value is Record<string, unknown> {
   return (
-    value != null &&
-    (typeof value === 'object' || typeof value === 'function')
+    value != null && (typeof value === 'object' || typeof value === 'function')
   );
 }
 

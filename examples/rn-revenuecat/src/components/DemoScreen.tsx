@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import { SafeAreaView, ScrollView, StatusBar, StyleSheet, Text } from 'react-native';
+import {
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+} from 'react-native';
 
 type DemoScreenProps = {
   title: string;

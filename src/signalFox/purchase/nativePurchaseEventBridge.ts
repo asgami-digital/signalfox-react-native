@@ -89,7 +89,9 @@ export function stopListeningToNativePurchaseEvents(): void {
     return;
   }
 
-  debugLog('stopListeningToNativePurchaseEvents', { nativeChannelSessionCount });
+  debugLog('stopListeningToNativePurchaseEvents', {
+    nativeChannelSessionCount,
+  });
   subscription?.remove();
   subscription = null;
   nativePurchaseListenerEnabled = false;

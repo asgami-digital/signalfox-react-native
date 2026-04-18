@@ -12,10 +12,10 @@ import {
 } from '../reactNativeModalPatch';
 
 jest.mock('react-native', () => {
-  const React = require('react');
+  const ReactModule = require('react');
   return {
     Modal: jest.fn((props: Record<string, unknown>) =>
-      React.createElement('mock-modal', props)
+      ReactModule.createElement('mock-modal', props)
     ),
   };
 });

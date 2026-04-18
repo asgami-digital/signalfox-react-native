@@ -20,7 +20,11 @@ export function HomeScreen({ navigation }: Props) {
     >
       <InfoCard
         title="Quick Status"
-        body={`SignalFox API key: ${hasSignalFoxApiKey() ? 'configured' : 'pending'}\nRevenueCat API key: ${hasRevenueCatApiKey() ? 'configured' : 'pending'}\nSDK multiply(): ${result}`}
+        body={`SignalFox API key: ${
+          hasSignalFoxApiKey() ? 'configured' : 'pending'
+        }\nRevenueCat API key: ${
+          hasRevenueCatApiKey() ? 'configured' : 'pending'
+        }\nSDK multiply(): ${result}`}
       />
 
       <View style={styles.group}>

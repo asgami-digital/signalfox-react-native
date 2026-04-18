@@ -62,14 +62,14 @@ function maybeLogModalStack(action: string, modalId?: string | null): void {
   // En RN suele existir global __DEV__. Si no existe, logueamos igualmente
   // (preferimos visibilidad en debugging a perder información).
   let isDev = false;
-  const globalProcess = (globalThis as {
-    process?: { env?: { NODE_ENV?: string } };
-  }).process;
+  const globalProcess = (
+    globalThis as {
+      process?: { env?: { NODE_ENV?: string } };
+    }
+  ).process;
   if (typeof (globalThis as any).__DEV__ === 'boolean') {
     isDev = (globalThis as any).__DEV__;
-  } else if (
-    typeof globalProcess?.env?.NODE_ENV === 'string'
-  ) {
+  } else if (typeof globalProcess?.env?.NODE_ENV === 'string') {
     isDev = globalProcess.env.NODE_ENV !== 'production';
   }
   if (!isDev) return;
@@ -81,9 +81,7 @@ function maybeLogModalStack(action: string, modalId?: string | null): void {
     modalId: typeof modalId === 'string' && modalId.length > 0 ? modalId : null,
     stack: stackSnapshot,
     active:
-      stackSnapshot.length > 0
-        ? stackSnapshot[stackSnapshot.length - 1]
-        : null,
+      stackSnapshot.length > 0 ? stackSnapshot[stackSnapshot.length - 1] : null,
   });
 }
 

@@ -1,9 +1,5 @@
-export {
-  applyModalPatch,
-} from './reactNativeModalPatch';
-export {
-  applyTouchablePatch,
-} from './reactNativeTouchablePatch';
+export { applyModalPatch } from './reactNativeModalPatch';
+export { applyTouchablePatch } from './reactNativeTouchablePatch';
 export { reactNavigationIntegration } from './reactNavigationIntegration';
 export {
   expoRouterIntegration,

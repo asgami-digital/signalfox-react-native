@@ -11,6 +11,36 @@ import {
 } from '../config/demoConfig';
 import { logDemoEvent } from '../utils/logger';
 
+async function connectAndLoadProducts(params: {
+  sku: string;
+  fetchProducts: ReturnType<typeof useIAP>['fetchProducts'];
+  setStatusText: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  const { sku, fetchProducts, setStatusText } = params;
+
+  if (!isActiveSubscriptionSkuConfigured()) {
+    Alert.alert(
+      'Missing productId',
+      'Replace the placeholder SKU in src/config/demoConfig.ts before testing purchases.'
+    );
+    return;
+  }
+
+  try {
+    logDemoEvent('iap_connect_start', { sku });
+    await fetchProducts({ skus: [sku], type: 'subs' });
+    setStatusText('Store query sent. Check the list of loaded products.');
+    logDemoEvent('iap_products_loaded', {
+      requestedSkus: [sku],
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatusText(`Store loading error: ${message}`);
+    logDemoEvent('iap_connect_error', { message });
+    Alert.alert('Store error', message);
+  }
+}
+
 export default function PurchaseScreen() {
   const [statusText, setStatusText] = useState(
     'Connect to the store to load products.'
@@ -58,29 +88,7 @@ export default function PurchaseScreen() {
   });
 
   const connectAndLoad = async () => {
-    if (!isActiveSubscriptionSkuConfigured()) {
-      Alert.alert(
-        'Missing productId',
-        'Replace the placeholder SKU in src/config/demoConfig.ts before testing purchases.'
-      );
-      return;
-    }
-
-    try {
-      logDemoEvent('iap_connect_start', { sku });
-      await fetchProducts({ skus: [sku], type: 'subs' });
-      setStatusText(
-        'Store query sent. Check the list of loaded products.'
-      );
-      logDemoEvent('iap_products_loaded', {
-        requestedSkus: [sku],
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setStatusText(`Store loading error: ${message}`);
-      logDemoEvent('iap_connect_error', { message });
-      Alert.alert('Store error', message);
-    }
+    await connectAndLoadProducts({ sku, fetchProducts, setStatusText });
   };
 
   const buySubscription = async () => {
@@ -137,10 +145,12 @@ export default function PurchaseScreen() {
   };
 
   useEffect(() => {
-    if (connected) {
-      void connectAndLoad();
+    if (!connected) {
+      return;
     }
-  }, [connected]);
+
+    connectAndLoadProducts({ sku, fetchProducts, setStatusText });
+  }, [connected, fetchProducts, sku]);
 
   return (
     <DemoScreen
@@ -162,7 +172,9 @@ export default function PurchaseScreen() {
             ? subscriptions
                 .map(
                   (item) =>
-                    `${item.id} | ${item.title ?? 'untitled'} | ${item.displayPrice ?? 'no price'}`
+                    `${item.id} | ${item.title ?? 'untitled'} | ${
+                      item.displayPrice ?? 'no price'
+                    }`
                 )
                 .join('\n')
             : 'No subscriptions are available yet.'
@@ -174,14 +186,14 @@ export default function PurchaseScreen() {
         signalFoxId="expo_purchase_reload_store"
         variant="ghost"
         onPress={() => {
-          void connectAndLoad();
+          connectAndLoad().catch(() => {});
         }}
       />
       <ActionButton
         label="Buy subscription"
         signalFoxId="expo_purchase_buy_subscription"
         onPress={() => {
-          void buySubscription();
+          buySubscription().catch(() => {});
         }}
       />
       <ActionButton
@@ -189,7 +201,7 @@ export default function PurchaseScreen() {
         signalFoxId="expo_purchase_restore_purchases"
         variant="secondary"
         onPress={() => {
-          void restoreStorePurchases();
+          restoreStorePurchases().catch(() => {});
         }}
       />
       <ActionButton

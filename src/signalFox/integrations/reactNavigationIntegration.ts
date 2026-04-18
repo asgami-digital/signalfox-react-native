@@ -468,7 +468,11 @@ export function reactNavigationIntegration(
           currentRouteSnapshot.isModal &&
           !previousStackRouteKeys.has(currentRouteSnapshot.key)
         ) {
-          emitNavigationModalOpen(core, currentRouteSnapshot, previousScreenName);
+          emitNavigationModalOpen(
+            core,
+            currentRouteSnapshot,
+            previousScreenName
+          );
         }
 
         const navigatorContext = buildNavigatorContext(
