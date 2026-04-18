@@ -36,9 +36,9 @@
     "example:rn-revenuecat": "yarn workspace @asgami/signalfox-rn-revenuecat start",
     "example:rn-revenuecat:ios": "yarn workspace @asgami/signalfox-rn-revenuecat ios",
     "example:rn-revenuecat:android": "yarn workspace @asgami/signalfox-rn-revenuecat android",
-    "example:expo-rniap": "npm --prefix ./examples/expo-rniap run start",
-    "example:expo-rniap:ios": "npm --prefix ./examples/expo-rniap run ios",
-    "example:expo-rniap:android": "npm --prefix ./examples/expo-rniap run android",
+    "example:expo-rniap": "yarn workspace expo-rniap start",
+    "example:expo-rniap:ios": "yarn workspace expo-rniap ios",
+    "example:expo-rniap:android": "yarn workspace expo-rniap android",
     "clean": "del-cli android/build examples/rn-revenuecat/android/build examples/rn-revenuecat/android/app/build examples/rn-revenuecat/ios/build lib",
     "prepare": "bob build && node ./scripts/ensure-rn-augmentation-in-lib-types.mjs",
     "typecheck": "tsc",
@@ -102,9 +102,10 @@
     }
   },
   "workspaces": [
-    "examples/rn-revenuecat"
+    "examples/rn-revenuecat",
+    "examples/expo-rniap"
   ],
-  "packageManager": "yarn@4.11.0",
+  "packageManager": "yarn@4.14.1",
   "react-native-builder-bob": {
     "source": "src",
     "output": "lib",

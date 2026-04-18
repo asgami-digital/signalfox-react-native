@@ -34,7 +34,7 @@ Ambas están pensadas para probar:
 ## Linking local
 
 - `rn-revenuecat` usa `react-native.config.js`, `babel.config.js` y `metro.config.js` para apuntar al paquete local del repo.
-- `expo-rniap` usa `metro.config.js`, `tsconfig.json` y la dependencia local `file:../..` para resolver `@asgami-digital/signalfox-react-native`.
+- `expo-rniap` usa `metro.config.js`, `tsconfig.json` y la dependencia `workspace:*` para resolver `@asgami-digital/signalfox-react-native`.
 
 ## Verificación hecha
 

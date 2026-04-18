@@ -1,22 +1,29 @@
 # @asgami-digital/signalfox-react-native
 
-SignalFox for React Native helps you instrument app analytics with a provider-first setup and optional integrations for navigation and purchases.
+SignalFox for React Native is the official client library for instrumenting your app with SignalFox.
 
-It is designed to work with React Native apps that want a simple initialization flow, automatic lifecycle tracking, and a consistent way to identify native touchables and modals.
+It helps you track app lifecycle, native modals, native touchables, navigation, and purchase flows with a simple provider-based setup. It also lets you assign stable `signalFoxId` values to the UI elements that matter most, so SignalFox can build a consistent understanding of your app structure over time.
 
-## What It Is For
+## Links
+
+- Website: https://signalfox.io
+- Documentation: https://docs.signalfox.io
+- GitHub: https://github.com/TU-USUARIO/TU-REPO
+
+## What This Library Does
 
 Use this library when you want to:
 
 - initialize SignalFox once at the app root
-- attach your SignalFox API key
-- enable optional integrations such as React Navigation, RevenueCat, or `react-native-iap`
-- intercept native modal and touchable events through startup patches
-- assign stable, unique `signalFoxId` values to UI elements you want to track
+- connect your app using your SignalFox API key
+- automatically track app lifecycle events
+- enable tracking for native modals and native touchables at startup
+- add optional integrations such as React Navigation, RevenueCat, or `react-native-iap`
+- assign stable `signalFoxId` values to screens, modals, and interactive elements you want SignalFox to understand
 
 ## Installation
 
-Install the library:
+Install the package:
 
 ```sh
 npm install @asgami-digital/signalfox-react-native
@@ -28,14 +35,14 @@ or:
 yarn add @asgami-digital/signalfox-react-native
 ```
 
-If you use optional integrations, install the packages you need in your app as well:
+If you use optional integrations, install the corresponding packages in your app as needed:
 
 - `@react-navigation/native`
 - `react-native-purchases`
 - `react-native-purchases-ui`
 - `react-native-iap`
 
-For iOS apps, run CocoaPods after installing dependencies:
+For iOS, run CocoaPods after installing dependencies:
 
 ```sh
 cd ios && pod install
@@ -43,16 +50,16 @@ cd ios && pod install
 
 ## Quick Start
 
-There are two pieces to the basic setup:
+The basic setup has two steps:
 
-1. apply the native patches at app startup
+1. apply the startup patches as early as possible
 2. wrap your app with `SignalFoxProvider`
 
-### 1. Apply Native Patches
+### 1. Apply Startup Patches
 
-Call these patch initializers as early as possible, before your app renders.
+Call these patch initializers before your app renders.
 
-They are used to intercept native modal and touchable events.
+They enable tracking for native modals and native touchables.
 
 ```ts
 import {
@@ -64,16 +71,16 @@ applyModalPatch();
 applyTouchablePatch();
 ```
 
-A common place for this is your entry file, such as `index.js` or a bootstrap module imported from it.
+A common place for this is your app entry file, such as `index.js`, or a bootstrap module imported from it.
 
-### 2. Initialize the Provider
+### 2. Wrap Your App with `SignalFoxProvider`
 
-Wrap your application with `SignalFoxProvider` and provide your SignalFox API key.
+Wrap your application with `SignalFoxProvider` and pass your SignalFox API key.
 
 ```tsx
 import React from 'react';
 import { SignalFoxProvider } from '@asgami-digital/signalfox-react-native';
-import { App } from './src/App';
+import App from './src/App';
 
 export default function Root() {
   return (
@@ -86,10 +93,10 @@ export default function Root() {
 
 ## Provider Configuration
 
-`SignalFoxProvider` accepts:
+`SignalFoxProvider` accepts the following main props:
 
 - `apiKey`: your SignalFox API key
-- `logOnly`: optional boolean for local/debug usage
+- `logOnly`: optional boolean for local or debug-only usage
 - `integrations`: optional array of extra integrations
 
 Basic example:
@@ -103,6 +110,16 @@ Basic example:
 Example with optional integrations:
 
 ```tsx
+import Purchases from 'react-native-purchases';
+import RevenueCatUI from 'react-native-purchases-ui';
+import { navigationRef } from './navigation';
+
+import {
+  SignalFoxProvider,
+  reactNavigationIntegration,
+  revenueCatIntegration,
+} from '@asgami-digital/signalfox-react-native';
+
 <SignalFoxProvider
   apiKey="YOUR_SIGNALFOX_API_KEY"
   integrations={[
@@ -114,14 +131,14 @@ Example with optional integrations:
   ]}
 >
   <App />
-</SignalFoxProvider>
+</SignalFoxProvider>;
 ```
 
 The provider already includes its internal default integrations for app lifecycle, native modals, and native touchables. You do not need to pass those manually.
 
 ## Optional Integrations
 
-The library supports optional integrations that you can pass through the provider.
+You can extend SignalFox with optional integrations depending on the libraries your app uses.
 
 ### React Navigation
 
@@ -207,11 +224,11 @@ import {
 
 To make touchable and modal tracking reliable, you must add a unique `signalFoxId` to every native touchable and every native modal you want SignalFox to track.
 
-This ID should be:
+A good `signalFoxId` should be:
 
 - unique within the app
 - stable over time
-- readable enough to identify the UI element or modal purpose
+- descriptive enough to identify the UI element or modal purpose
 
 Good examples:
 

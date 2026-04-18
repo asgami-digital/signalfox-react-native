@@ -10,7 +10,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
-    "@asgami-digital/signalfox-react-native": "file:../..",
+    "@asgami-digital/signalfox-react-native": "workspace:*",
     "expo": "~55.0.15",
     "expo-constants": "~55.0.14",
     "expo-linking": "~55.0.13",
