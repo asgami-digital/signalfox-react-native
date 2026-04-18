@@ -62,6 +62,7 @@
   },
   "homepage": "https://github.com/asgami-digital/signalfox-react-native#readme",
   "publishConfig": {
+    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {

@@ -17,6 +17,11 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+/ios/Pods
+/ios/build
+/ios/*.xcworkspace
+/android/build
+/android/.gradle
 
 # Metro
 .metro-health-check*
@@ -37,7 +42,3 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
-
-# generated native folders
-/ios
-/android
