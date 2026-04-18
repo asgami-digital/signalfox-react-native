@@ -24,8 +24,9 @@ export interface IAnalyticsCore {
   trackSubview(params: SubviewParams): void;
 
   /**
-   * React Navigation: retiene eventos (excepto `screen_view`) hasta `clearNavigationIntentPending`
-   * o hasta `NAVIGATION_INTENT_BUFFER_MAX_MS` sin resolver.
+   * Integraciones de navegación (React Navigation / Expo Router): retienen eventos
+   * (excepto `screen_view`) hasta `clearNavigationIntentPending` o hasta
+   * `NAVIGATION_INTENT_BUFFER_MAX_MS` sin resolver.
    */
   markNavigationIntentPending?(): void;
   clearNavigationIntentPending?(): void;

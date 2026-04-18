@@ -57,7 +57,7 @@ export interface RevenueCatIntegrationOptions {
 
 /**
  * Integración de analytics sobre RevenueCat: parchea `Purchases` (y opcionalmente `RevenueCatUI`).
- * No depende de `nativePurchaseIntegration` ni del canal nativo; solo registra el core en
+ * No depende del canal nativo de compras; solo registra el core en
  * `purchaseAnalyticsBridge` para `notifyPurchase*` desde JS.
  */
 export function revenueCatIntegration(

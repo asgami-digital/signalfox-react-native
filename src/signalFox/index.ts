@@ -6,18 +6,23 @@
 export { AnalyticsCore } from './core';
 export type { AnalyticsCoreConfig } from './core';
 export {
-  appStateIntegration,
-  reactNativeModalPatchIntegration,
-  reactNativeTouchablePatchIntegration,
   reactNavigationIntegration,
-  nativePurchaseIntegration,
+  expoRouterIntegration,
+  EXPO_ROUTER_INTEGRATION_NAME,
+  reactNativeIapIntegration,
+  applyReactNativeIapPatch,
+  REACT_NATIVE_IAP_ANALYTICS_INTEGRATION_NAME,
   revenueCatIntegration,
   resolveRevenueCatPurchasesExport,
   REVENUECAT_ANALYTICS_INTEGRATION_NAME,
   applyModalPatch,
   applyTouchablePatch,
 } from './integrations';
-export type { RevenueCatIntegrationOptions } from './integrations';
+export type {
+  RevenueCatIntegrationOptions,
+  ExpoRouterIntegrationOptions,
+  ReactNativeIapIntegrationOptions,
+} from './integrations';
 export { SignalFoxProvider, useSignalFox } from './provider';
 export type { SignalFoxProviderProps, SignalFoxContextValue } from './provider';
 export type {

@@ -159,6 +159,52 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   }
 }
 
+- (void)beginHeuristicPaywallSession:(RCTPromiseResolveBlock)resolve
+                              reject:(RCTPromiseRejectBlock)reject
+{
+  @try {
+    Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
+    if (!trackerClass) {
+      reject(@"BEGIN_HEURISTIC_PAYWALL_SESSION_ERROR", @"SignalfoxPurchaseAnalyticsTracker not found", nil);
+      return;
+    }
+
+    id tracker = ((id (*)(id, SEL))objc_msgSend)(trackerClass, @selector(shared));
+    if (!tracker) {
+      reject(@"BEGIN_HEURISTIC_PAYWALL_SESSION_ERROR", @"SignalfoxPurchaseAnalyticsTracker.shared is nil", nil);
+      return;
+    }
+
+    ((void (*)(id, SEL))objc_msgSend)(tracker, @selector(beginHeuristicPaywallSession));
+    resolve(nil);
+  } @catch (NSException *exception) {
+    reject(@"BEGIN_HEURISTIC_PAYWALL_SESSION_ERROR", exception.reason, nil);
+  }
+}
+
+- (void)endHeuristicPaywallSession:(RCTPromiseResolveBlock)resolve
+                            reject:(RCTPromiseRejectBlock)reject
+{
+  @try {
+    Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
+    if (!trackerClass) {
+      reject(@"END_HEURISTIC_PAYWALL_SESSION_ERROR", @"SignalfoxPurchaseAnalyticsTracker not found", nil);
+      return;
+    }
+
+    id tracker = ((id (*)(id, SEL))objc_msgSend)(trackerClass, @selector(shared));
+    if (!tracker) {
+      reject(@"END_HEURISTIC_PAYWALL_SESSION_ERROR", @"SignalfoxPurchaseAnalyticsTracker.shared is nil", nil);
+      return;
+    }
+
+    id snapshot = ((id (*)(id, SEL))objc_msgSend)(tracker, @selector(endHeuristicPaywallSession));
+    resolve(snapshot);
+  } @catch (NSException *exception) {
+    reject(@"END_HEURISTIC_PAYWALL_SESSION_ERROR", exception.reason, nil);
+  }
+}
+
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {

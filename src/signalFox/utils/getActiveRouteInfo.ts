@@ -1,5 +1,5 @@
 /**
- * Información de la ruta activa para screen_view y detección de modales.
+ * Información de la ruta activa.
  * Soporta navegación anidada: se devuelve la ruta hoja (más profunda).
  */
 
@@ -7,9 +7,7 @@ import type { NavStateLike } from './getActiveRouteName';
 
 export interface ActiveRouteInfo {
   name: string;
-  /** Presentación de la pantalla si está disponible (p. ej. 'fullScreenModal', 'modal').
-   * React Navigation no incluye options en el state serializado; debe proveerse vía getPresentationForRoute. */
-  presentation?: string;
+  key?: string;
 }
 
 const MODAL_PRESENTATIONS = new Set<string>([
@@ -29,14 +27,9 @@ export function isRoutePresentedAsModal(
   return MODAL_PRESENTATIONS.has(presentation);
 }
 
-/**
- * Obtiene la ruta activa más profunda y, si se pasa getter, su presentación.
- * getPresentationForRoute: opcional; en muchos setups las options no vienen en el state
- * y hay que resolverlas desde la configuración del navigator (ver limitaciones en comentarios del integration).
- */
+/** Obtiene la ruta activa más profunda. */
 export function getActiveRouteInfo(
-  state: NavStateLike | undefined,
-  getPresentationForRoute?: (routeName: string) => string | undefined
+  state: NavStateLike | undefined
 ): ActiveRouteInfo | undefined {
   if (
     !state?.routes?.length ||
@@ -50,15 +43,14 @@ export function getActiveRouteInfo(
   const nested = route.state;
   if (nested?.routes?.length) {
     return (
-      getActiveRouteInfo(nested, getPresentationForRoute) ?? {
+      getActiveRouteInfo(nested) ?? {
         name: route.name,
-        presentation: getPresentationForRoute?.(route.name),
+        key: route.key,
       }
     );
   }
-  const name = route.name;
   return {
-    name,
-    presentation: getPresentationForRoute?.(name),
+    name: route.name,
+    key: route.key,
   };
 }

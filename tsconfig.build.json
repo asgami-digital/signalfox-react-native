@@ -2,6 +2,7 @@
   "extends": "./tsconfig",
   "exclude": [
     "example",
+    "examples",
     "lib",
     "**/__tests__/**",
     "**/*.test.ts",

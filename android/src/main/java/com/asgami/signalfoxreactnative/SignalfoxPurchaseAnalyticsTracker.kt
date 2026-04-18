@@ -1,5 +1,8 @@
 package com.asgami.signalfoxreactnative
 
+import android.app.Activity
+import android.app.Application
+import android.os.Bundle
 import android.util.Log
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -9,12 +12,10 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
-import com.android.billingclient.api.PurchasesResult
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import java.math.BigInteger
 
 internal final class SignalfoxPurchaseAnalyticsTracker(
   private val reactContext: ReactApplicationContext
@@ -25,6 +26,29 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
 
   private var billingClient: BillingClient? = null
   @Volatile private var isStarted: Boolean = false
+  private val paywallStateLock = Any()
+  private var lifecycleCallbacksRegistered = false
+  private var heuristicPaywallIsOpen: Boolean = false
+  private var heuristicPaywallOpenedAtMs: Double? = null
+  private var heuristicSawInactiveDuringPaywall: Boolean = false
+  private var heuristicInactiveAtMs: Double? = null
+  private val activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+
+    override fun onActivityStarted(activity: Activity) = Unit
+
+    override fun onActivityResumed(activity: Activity) = Unit
+
+    override fun onActivityPaused(activity: Activity) {
+      noteInactiveDuringHeuristicPaywall("Activity.onPause:${activity.javaClass.simpleName}")
+    }
+
+    override fun onActivityStopped(activity: Activity) = Unit
+
+    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+
+    override fun onActivityDestroyed(activity: Activity) = Unit
+  }
 
   private data class PriceInfo(
     val price: Double?,
@@ -32,6 +56,10 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     val hasTrial: Boolean?,
     val trialDays: Int?,
   )
+
+  init {
+    registerLifecycleObserversIfNeeded()
+  }
 
   private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
     if (!isStarted) return@PurchasesUpdatedListener
@@ -167,6 +195,47 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     }
   }
 
+  fun beginHeuristicPaywallSession() {
+    val nowMs = System.currentTimeMillis().toDouble()
+    synchronized(paywallStateLock) {
+      heuristicPaywallIsOpen = true
+      heuristicPaywallOpenedAtMs = nowMs
+      heuristicSawInactiveDuringPaywall = false
+      heuristicInactiveAtMs = null
+    }
+
+    Log.d(TAG, "beginHeuristicPaywallSession openedAt=$nowMs")
+  }
+
+  fun endHeuristicPaywallSession() = Arguments.createMap().apply {
+    val snapshot = synchronized(paywallStateLock) {
+      val values = mapOf(
+        "paywallIsOpen" to heuristicPaywallIsOpen,
+        "paywallOpenedAt" to heuristicPaywallOpenedAtMs,
+        "sawInactiveDuringPaywall" to heuristicSawInactiveDuringPaywall,
+        "inactiveAt" to heuristicInactiveAtMs,
+      )
+      heuristicPaywallIsOpen = false
+      heuristicPaywallOpenedAtMs = null
+      heuristicSawInactiveDuringPaywall = false
+      heuristicInactiveAtMs = null
+      values
+    }
+
+    putBoolean("paywallIsOpen", snapshot["paywallIsOpen"] as Boolean)
+    (snapshot["paywallOpenedAt"] as Double?)?.let { putDouble("paywallOpenedAt", it) }
+    putBoolean(
+      "sawInactiveDuringPaywall",
+      snapshot["sawInactiveDuringPaywall"] as Boolean
+    )
+    (snapshot["inactiveAt"] as Double?)?.let { putDouble("inactiveAt", it) }
+
+    Log.d(
+      TAG,
+      "endHeuristicPaywallSession sawInactive=${snapshot["sawInactiveDuringPaywall"]} inactiveAt=${snapshot["inactiveAt"]}"
+    )
+  }
+
   private fun handlePurchaseCompleted(purchase: Purchase) {
     val productId = purchase.products.firstOrNull() ?: run {
       Log.w(TAG, "STUCK: handlePurchaseCompleted — purchase has no product id in products[]")
@@ -234,6 +303,46 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       .emit(SignalfoxPurchaseEventEmitterModule.PURCHASE_EVENT_CHANNEL, payload)
   }
 
+  private fun registerLifecycleObserversIfNeeded() {
+    if (lifecycleCallbacksRegistered) return
+
+    val application = reactContext.applicationContext as? Application
+    if (application == null) {
+      Log.w(
+        TAG,
+        "registerLifecycleObserversIfNeeded: applicationContext is not an Application"
+      )
+      return
+    }
+
+    application.registerActivityLifecycleCallbacks(activityLifecycleCallbacks)
+    lifecycleCallbacksRegistered = true
+    Log.d(TAG, "ActivityLifecycleCallbacks registered")
+  }
+
+  private fun noteInactiveDuringHeuristicPaywall(reason: String) {
+    val nowMs = System.currentTimeMillis().toDouble()
+    val snapshot = synchronized(paywallStateLock) {
+      if (!heuristicPaywallIsOpen) {
+        null
+      } else {
+        heuristicSawInactiveDuringPaywall = true
+        if (heuristicInactiveAtMs == null) {
+          heuristicInactiveAtMs = nowMs
+        }
+        mapOf(
+          "openedAt" to heuristicPaywallOpenedAtMs,
+          "inactiveAt" to heuristicInactiveAtMs,
+        )
+      }
+    } ?: return
+
+    Log.d(
+      TAG,
+      "heuristic paywall inactive reason=$reason openedAt=${snapshot["openedAt"]} inactiveAt=${snapshot["inactiveAt"]}"
+    )
+  }
+
   private fun queryProductDetails(
     productId: String,
     cb: (ProductDetails?) -> Unit
@@ -295,23 +404,16 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     return if (details.productType == BillingClient.ProductType.SUBS) {
       val offer = details.subscriptionOfferDetails?.firstOrNull()
       val phases = offer?.pricingPhases?.pricingPhaseList
+      val chosen = phases?.firstOrNull()
 
       // Inferimos trial/intro si existe una fase con precio 0.
       // No garantizamos (sin más metadatos) que la compra haya usado esa fase.
-      val trialPhase = phases?.firstOrNull { phase ->
-        val micros: BigInteger? = try {
-          phase.priceAmountMicros
-        } catch {
-          null
-        }
-        micros == BigInteger.ZERO
-      }
+      val trialPhase = phases?.firstOrNull { phase -> phase.priceAmountMicros == 0L }
 
       val hasTrial = trialPhase != null
 
-      val currency = trialPhase?.priceCurrencyCode ?: phases?.firstOrNull()?.priceCurrencyCode
+      val currency = trialPhase?.priceCurrencyCode ?: chosen?.priceCurrencyCode
 
-      val chosen = phases?.firstOrNull()
       val priceMicros = chosen?.priceAmountMicros
       val price = priceMicros?.let { micros ->
         micros.toDouble() / 1_000_000.0
@@ -331,7 +433,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       val price = priceMicros?.let { micros ->
         micros.toDouble() / 1_000_000.0
       }
-      val currency = oneTime?.priceCurrencyCode ?: details.priceCurrencyCode
+      val currency = oneTime?.priceCurrencyCode
       PriceInfo(price = price, currency = currency, hasTrial = null, trialDays = null)
     }
   }

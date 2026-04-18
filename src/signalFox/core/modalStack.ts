@@ -5,52 +5,123 @@
  * - el "modal activo" es el último del stack
  */
 
-const modalStack: string[] = [];
+export type ModalStackEntrySource =
+  | 'react_native_modal'
+  | 'react_navigation'
+  | 'unknown';
+
+export interface ModalStackEntry {
+  id: string;
+  stackKey: string;
+  source: ModalStackEntrySource;
+}
+
+type ModalStackEntryInput =
+  | string
+  | {
+      id: string;
+      stackKey?: string;
+      source?: ModalStackEntrySource;
+    };
+
+const modalStack: ModalStackEntry[] = [];
+
+function normalizeModalStackEntry(
+  entry: ModalStackEntryInput
+): ModalStackEntry | null {
+  if (typeof entry === 'string') {
+    const id = entry.trim();
+    if (id.length === 0) return null;
+    return {
+      id,
+      stackKey: id,
+      source: 'unknown',
+    };
+  }
+
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+
+  const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+  if (id.length === 0) return null;
+
+  const stackKey =
+    typeof entry.stackKey === 'string' && entry.stackKey.trim().length > 0
+      ? entry.stackKey.trim()
+      : id;
+
+  return {
+    id,
+    stackKey,
+    source: entry.source ?? 'unknown',
+  };
+}
 
 function maybeLogModalStack(action: string, modalId?: string | null): void {
   // En RN suele existir global __DEV__. Si no existe, logueamos igualmente
   // (preferimos visibilidad en debugging a perder información).
   let isDev = false;
+  const globalProcess = (globalThis as {
+    process?: { env?: { NODE_ENV?: string } };
+  }).process;
   if (typeof (globalThis as any).__DEV__ === 'boolean') {
     isDev = (globalThis as any).__DEV__;
   } else if (
-    typeof process !== 'undefined' &&
-    typeof (process as any).env?.NODE_ENV === 'string'
+    typeof globalProcess?.env?.NODE_ENV === 'string'
   ) {
-    isDev = (process as any).env.NODE_ENV !== 'production';
+    isDev = globalProcess.env.NODE_ENV !== 'production';
   }
   if (!isDev) return;
 
   // Snapshot del stack para que no cambie mientras se imprime.
-  const stackSnapshot = modalStack.slice();
+  const stackSnapshot = modalStack.map((entry) => ({ ...entry }));
   console.log('[AUTO_ANALYTICS][modal_stack]', {
     action,
     modalId: typeof modalId === 'string' && modalId.length > 0 ? modalId : null,
     stack: stackSnapshot,
     active:
-      stackSnapshot.length > 0 ? stackSnapshot[stackSnapshot.length - 1] : null,
+      stackSnapshot.length > 0
+        ? stackSnapshot[stackSnapshot.length - 1]
+        : null,
   });
 }
 
 export function getActiveModalId(): string | null {
   if (modalStack.length === 0) return null;
   const last = modalStack[modalStack.length - 1];
-  return typeof last === 'string' && last.length > 0 ? last : null;
+  return typeof last?.id === 'string' && last.id.length > 0 ? last.id : null;
 }
 
-export function modalStackPush(modalId: string): void {
-  if (typeof modalId !== 'string' || modalId.length === 0) return;
-  modalStack.push(modalId);
-  maybeLogModalStack('push', modalId);
+export function getActiveModalEntry(): ModalStackEntry | null {
+  if (modalStack.length === 0) return null;
+  return modalStack[modalStack.length - 1] ?? null;
 }
 
-export function modalStackPop(modalId?: string | null): string | null {
+export function getModalStackSnapshot(): ModalStackEntry[] {
+  return modalStack.map((entry) => ({ ...entry }));
+}
+
+export function modalStackPush(entry: ModalStackEntryInput): string | null {
+  const normalized = normalizeModalStackEntry(entry);
+  if (!normalized) return getActiveModalId();
+
+  const previousActiveModalId = getActiveModalId();
+  modalStack.push(normalized);
+  maybeLogModalStack('push', normalized.id);
+  return previousActiveModalId;
+}
+
+export function modalStackPop(stackKeyOrId?: string | null): string | null {
   if (modalStack.length === 0) return null;
 
-  if (typeof modalId === 'string' && modalId.length > 0) {
+  if (typeof stackKeyOrId === 'string' && stackKeyOrId.length > 0) {
     let removed = false;
     for (let i = modalStack.length - 1; i >= 0; i--) {
-      if (modalStack[i] === modalId) {
+      if (
+        modalStack[i]?.stackKey === stackKeyOrId ||
+        modalStack[i]?.id === stackKeyOrId
+      ) {
         modalStack.splice(i, 1);
         removed = true;
         break;
@@ -65,7 +136,7 @@ export function modalStackPop(modalId?: string | null): string | null {
     // Mejor no modificar el stack que adjuntar un parent_modal incorrecto.
   }
 
-  maybeLogModalStack('pop', modalId);
+  maybeLogModalStack('pop', stackKeyOrId);
   return getActiveModalId();
 }
 

@@ -12,8 +12,9 @@ import React, {
 import { AnalyticsCore } from '../core/AnalyticsCore';
 import { isDevApiKey } from '../core/constants';
 import { appStateIntegration } from '../integrations/appStateIntegration';
-import { nativePurchaseIntegration } from '../integrations/nativePurchaseIntegration';
+import { EXPO_ROUTER_INTEGRATION_NAME } from '../integrations/expoRouterIntegration';
 import { reactNativeModalPatchIntegration } from '../integrations/reactNativeModalPatch';
+import { reactNativeTouchablePatchIntegration } from '../integrations/reactNativeTouchablePatch';
 import { sortIntegrationsForSetup } from '../utils/sortIntegrationsForSetup';
 import type { AnalyticsIntegration } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
@@ -40,6 +41,29 @@ export interface SignalFoxContextValue {
 }
 
 const SignalFoxContext = createContext<SignalFoxContextValue | null>(null);
+
+function buildDefaultIntegrations(): AnalyticsIntegration[] {
+  return [
+    appStateIntegration(),
+    reactNativeModalPatchIntegration(),
+    reactNativeTouchablePatchIntegration(),
+  ];
+}
+
+function mergeIntegrations(
+  integrations: readonly AnalyticsIntegration[]
+): AnalyticsIntegration[] {
+  const merged = [...buildDefaultIntegrations(), ...integrations];
+  const seenNames = new Set<string>();
+
+  return merged.filter((integration) => {
+    if (seenNames.has(integration.name)) {
+      return false;
+    }
+    seenNames.add(integration.name);
+    return true;
+  });
+}
 
 export function SignalFoxProvider({
   apiKey,
@@ -81,28 +105,24 @@ export function SignalFoxProvider({
       coreRef.current = instance;
       instance.startSession();
 
-      const rawList =
-        integrations.length > 0
-          ? integrations
-          : [
-              appStateIntegration(),
-              nativePurchaseIntegration(),
-              reactNativeModalPatchIntegration(),
-            ];
+      const rawList = mergeIntegrations(integrations);
       const list = sortIntegrationsForSetup(rawList);
       const setupContext = { allIntegrations: list } as const;
-      const hasReactNavigationIntegration = list.some(
-        (integration) => integration.name === 'reactNavigation'
+      const hasNavigationIntegration = list.some(
+        (integration) =>
+          integration.name === 'reactNavigation' ||
+          integration.name === EXPO_ROUTER_INTEGRATION_NAME
       );
-      if (hasReactNavigationIntegration) {
+      if (hasNavigationIntegration) {
         // Cinturón y tirantes: si hay integración de navegación, asumimos una transición
         // inicial pendiente para que eventos tempranos (p. ej. flow_step_view) no se
         // procesen antes de tener oportunidad de resolver pantalla activa.
         instance.markNavigationIntentPending?.();
       }
-      // Tras `init()`: si incluyes `reactNavigationIntegration`, su `setup` marca intención
-      // de navegación y registra listeners. Así el primer `trackStep` no gana la carrera
-      // a un `screen_view`. Sin integración de navegación, nadie marca pending.
+      // Tras `init()`: si incluyes una integración de navegación (`reactNavigationIntegration`
+      // o `expoRouterIntegration`), su `setup` marca intención de navegación y registra
+      // listeners. Así el primer `trackStep` no gana la carrera a un `screen_view`.
+      // Sin integración de navegación, nadie marca pending.
       cleanupRef.current = list.map((integration) =>
         integration.setup(instance, setupContext)
       );

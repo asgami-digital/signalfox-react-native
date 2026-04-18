@@ -23,6 +23,21 @@ export interface Spec extends TurboModule {
    * que puede emitir `restore_completed`.
    */
   reconcileNativePurchases(): Promise<void>;
+
+  /**
+   * Abre una ventana heurística de paywall para inferir `purchase_started`
+   * a partir de `inactive` mientras RevenueCatUI está visible.
+   */
+  beginHeuristicPaywallSession(): Promise<void>;
+
+  /**
+   * Cierra la ventana heurística del paywall y devuelve si se observó
+   * `inactive` durante su vida y en qué instante ocurrió.
+   */
+  endHeuristicPaywallSession(): Promise<{
+    sawInactiveDuringPaywall?: boolean;
+    inactiveAt?: number;
+  } | null>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('SignalfoxReactNative');

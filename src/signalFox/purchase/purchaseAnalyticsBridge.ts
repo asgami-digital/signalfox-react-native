@@ -11,6 +11,7 @@ let activeCore: IAnalyticsCore | null = null;
 let bridgeRefCount = 0;
 const lastEventSeenAtMs = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 3000;
+const COMPLETION_DEDUPE_WINDOW_MS = 10000;
 
 /** Último sku notificado con `notifyPurchaseStarted` (p. ej. Android cancel sin productId). */
 let pendingPurchaseProductId: string | null = null;
@@ -74,7 +75,10 @@ function makeDedupeKey(payload: NativePurchaseEventPayload): string {
   ].join('::');
 }
 
-function shouldDedupe(payload: NativePurchaseEventPayload): boolean {
+function shouldDedupe(
+  payload: NativePurchaseEventPayload,
+  dedupeWindowMs = DEDUPE_WINDOW_MS
+): boolean {
   const key = makeDedupeKey(payload);
   if (
     !payload.productId &&
@@ -86,7 +90,7 @@ function shouldDedupe(payload: NativePurchaseEventPayload): boolean {
 
   const now = Date.now();
   const prev = lastEventSeenAtMs.get(key);
-  if (typeof prev === 'number' && now - prev < DEDUPE_WINDOW_MS) {
+  if (typeof prev === 'number' && now - prev < dedupeWindowMs) {
     debugWarn('Dedupe: dropping duplicate native purchase event', { key });
     return true;
   }
@@ -176,7 +180,9 @@ export function ingestNativePurchaseChannelPayload(
 }
 
 export function notifyPurchaseStarted(
-  payload: Omit<NativePurchaseEventPayload, 'eventName'>
+  payload: (Omit<NativePurchaseEventPayload, 'eventName'> & {
+    timestamp?: number;
+  })
 ): void {
   setPendingPurchaseProductId((payload as { productId?: string }).productId);
 
@@ -198,7 +204,14 @@ export function notifyPurchaseStarted(
   });
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
-  activeCore.trackEvent(coreEvent as any);
+  activeCore.trackEvent({
+    ...coreEvent,
+    ...(typeof payload.timestamp === 'number' &&
+    Number.isFinite(payload.timestamp) &&
+    payload.timestamp > 0
+      ? { timestamp: payload.timestamp }
+      : {}),
+  } as any);
 }
 
 export function notifyPurchaseCancelled(
@@ -240,12 +253,22 @@ export function notifyPurchaseCompleted(
 ): void {
   if (!activeCore) return;
 
-  const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
+  const completedPayload = {
     ...(payload as any),
     eventName: 'purchase_completed',
     platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
     store: payload?.store ?? defaultStoreForPlatform(),
-  });
+  } as NativePurchaseEventPayload;
+  if (shouldDedupe(completedPayload, COMPLETION_DEDUPE_WINDOW_MS)) {
+    debugLog('dedupe: skipped duplicate JS purchase payload', {
+      eventName: completedPayload.eventName,
+      productId: completedPayload.productId,
+      transactionId: completedPayload.transactionId,
+    });
+    return;
+  }
+
+  const normalized = normalizeNativePurchaseEventToAnalyticsEvent(completedPayload);
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
   activeCore.trackEvent(coreEvent as any);
@@ -257,10 +280,18 @@ export function notifyRestoreCompleted(
 ): void {
   if (!activeCore) return;
 
-  const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
+  const restorePayload = {
     ...(payload as any),
     eventName: 'restore_completed',
-  });
+  } as NativePurchaseEventPayload;
+  if (shouldDedupe(restorePayload, COMPLETION_DEDUPE_WINDOW_MS)) {
+    debugLog('dedupe: skipped duplicate JS restore payload', {
+      restoredProductIds: restorePayload.restoredProductIds,
+    });
+    return;
+  }
+
+  const normalized = normalizeNativePurchaseEventToAnalyticsEvent(restorePayload);
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
   activeCore.trackEvent(coreEvent as any);
@@ -268,7 +299,8 @@ export function notifyRestoreCompleted(
 
 export function notifyModalOpened(
   targetId: string,
-  payloadExtras?: Record<string, unknown>
+  payloadExtras?: Record<string, unknown>,
+  timestamp?: number
 ): void {
   if (!activeCore) return;
 
@@ -278,6 +310,11 @@ export function notifyModalOpened(
 
   activeCore.trackEvent({
     type: 'modal_open',
+    ...(typeof timestamp === 'number' &&
+    Number.isFinite(timestamp) &&
+    timestamp > 0
+      ? { timestamp }
+      : {}),
     signalFoxDisplayName: trimmedTargetId,
     target_type: 'modal',
     payload: {
@@ -291,7 +328,8 @@ export function notifyModalOpened(
 
 export function notifyModalClosed(
   targetId: string,
-  payloadExtras?: Record<string, unknown>
+  payloadExtras?: Record<string, unknown>,
+  timestamp?: number
 ): void {
   if (!activeCore) return;
 
@@ -301,6 +339,11 @@ export function notifyModalClosed(
 
   activeCore.trackEvent({
     type: 'modal_close',
+    ...(typeof timestamp === 'number' &&
+    Number.isFinite(timestamp) &&
+    timestamp > 0
+      ? { timestamp }
+      : {}),
     signalFoxDisplayName: trimmedTargetId,
     target_type: 'modal',
     payload: {

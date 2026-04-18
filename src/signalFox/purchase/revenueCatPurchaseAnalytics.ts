@@ -1,5 +1,6 @@
 import React from 'react';
 import { Platform } from 'react-native';
+import SignalfoxReactNative from '../../NativeSignalfoxReactNative';
 import {
   notifyModalClosed,
   notifyModalOpened,
@@ -15,10 +16,27 @@ const PAYWALL_PATCHABLE_METHODS = [
   'presentPaywall',
   'presentPaywallIfNeeded',
 ] as const;
+const PAYWALL_RESULT_NOT_PRESENTED = 'NOT_PRESENTED';
+const PAYWALL_RESULT_ERROR = 'ERROR';
+const PAYWALL_RESULT_CANCELLED = 'CANCELLED';
+const PAYWALL_RESULT_PURCHASED = 'PURCHASED';
 
 let activeRevenueCatPaywallSources = 0;
+let heuristicPaywallState: {
+  paywallIsOpen: boolean;
+  paywallOpenedAt?: number;
+  sawInactiveDuringPaywall: boolean;
+  inactiveAt?: number;
+  sawPurchaseStartedDuringPaywall: boolean;
+  sawPurchaseTerminalDuringPaywall: boolean;
+} = {
+  paywallIsOpen: false,
+  sawInactiveDuringPaywall: false,
+  sawPurchaseStartedDuringPaywall: false,
+  sawPurchaseTerminalDuringPaywall: false,
+};
 
-function openRevenueCatPaywallSource(trigger: string): void {
+function openRevenueCatPaywallSource(trigger: string, timestamp?: number): void {
   const shouldEmitOpen = activeRevenueCatPaywallSources === 0;
   activeRevenueCatPaywallSources += 1;
 
@@ -30,10 +48,10 @@ function openRevenueCatPaywallSource(trigger: string): void {
     provider: 'revenuecat',
     trigger,
     paywall_name: REVENUECAT_PAYWALL_MODAL_NAME,
-  });
+  }, timestamp);
 }
 
-function closeRevenueCatPaywallSource(trigger: string): void {
+function closeRevenueCatPaywallSource(trigger: string, timestamp?: number): void {
   if (activeRevenueCatPaywallSources <= 0) {
     return;
   }
@@ -47,7 +65,142 @@ function closeRevenueCatPaywallSource(trigger: string): void {
     provider: 'revenuecat',
     trigger,
     paywall_name: REVENUECAT_PAYWALL_MODAL_NAME,
-  });
+  }, timestamp);
+}
+
+function resetHeuristicPaywallState(): void {
+  heuristicPaywallState = {
+    paywallIsOpen: false,
+    sawInactiveDuringPaywall: false,
+    sawPurchaseStartedDuringPaywall: false,
+    sawPurchaseTerminalDuringPaywall: false,
+  };
+}
+
+function markHeuristicPaywallPurchaseStartedSeen(): void {
+  if (!heuristicPaywallState.paywallIsOpen) {
+    return;
+  }
+  heuristicPaywallState.sawPurchaseStartedDuringPaywall = true;
+}
+
+function markHeuristicPaywallPurchaseTerminalSeen(): void {
+  if (!heuristicPaywallState.paywallIsOpen) {
+    return;
+  }
+  heuristicPaywallState.sawPurchaseTerminalDuringPaywall = true;
+}
+
+async function beginHeuristicPaywallSession(openedAt: number): Promise<void> {
+  heuristicPaywallState = {
+    paywallIsOpen: true,
+    paywallOpenedAt: openedAt,
+    sawInactiveDuringPaywall: false,
+    inactiveAt: undefined,
+    sawPurchaseStartedDuringPaywall: false,
+    sawPurchaseTerminalDuringPaywall: false,
+  };
+
+  if (Platform.OS !== 'ios') {
+    return;
+  }
+
+  try {
+    await SignalfoxReactNative.beginHeuristicPaywallSession?.();
+  } catch {
+    // Heurística best-effort: si el bridge nativo falla, seguimos con modal analytics.
+  }
+}
+
+async function endHeuristicPaywallSession(): Promise<{
+  paywallIsOpen: boolean;
+  paywallOpenedAt?: number;
+  sawInactiveDuringPaywall: boolean;
+  inactiveAt?: number;
+  sawPurchaseStartedDuringPaywall: boolean;
+  sawPurchaseTerminalDuringPaywall: boolean;
+}> {
+  const snapshot = { ...heuristicPaywallState };
+
+  if (Platform.OS === 'ios') {
+    try {
+      const nativeSnapshot =
+        await SignalfoxReactNative.endHeuristicPaywallSession?.();
+      if (nativeSnapshot?.sawInactiveDuringPaywall) {
+        snapshot.sawInactiveDuringPaywall = true;
+      }
+      if (
+        typeof nativeSnapshot?.inactiveAt === 'number' &&
+        Number.isFinite(nativeSnapshot.inactiveAt) &&
+        nativeSnapshot.inactiveAt > 0
+      ) {
+        snapshot.inactiveAt = nativeSnapshot.inactiveAt;
+      }
+    } catch {
+      // Heurística best-effort: si el bridge nativo falla, no emitimos started heurístico.
+    }
+  }
+
+  resetHeuristicPaywallState();
+  return snapshot;
+}
+
+function shouldEmitHeuristicPurchaseStarted(result: unknown): boolean {
+  return (
+    result === PAYWALL_RESULT_PURCHASED ||
+    result === PAYWALL_RESULT_CANCELLED ||
+    result === PAYWALL_RESULT_ERROR
+  );
+}
+
+function shouldTreatAsPresentedPaywall(
+  method: (typeof PAYWALL_PATCHABLE_METHODS)[number],
+  result: unknown
+): boolean {
+  if (method === 'presentPaywallIfNeeded') {
+    return result !== PAYWALL_RESULT_NOT_PRESENTED;
+  }
+  return true;
+}
+
+async function finalizeHeuristicPaywallSession(params: {
+  method: (typeof PAYWALL_PATCHABLE_METHODS)[number];
+  result: unknown;
+  trigger: string;
+  openedAt: number;
+}): Promise<void> {
+  const { method, result, trigger, openedAt } = params;
+  const heuristicSnapshot = await endHeuristicPaywallSession();
+  const didPresent = shouldTreatAsPresentedPaywall(method, result);
+
+  if (!didPresent) {
+    return;
+  }
+
+  if (method === 'presentPaywallIfNeeded') {
+    openRevenueCatPaywallSource(trigger, openedAt);
+  }
+  closeRevenueCatPaywallSource(trigger);
+
+  // `purchase_started` es heurístico: lo inferimos si hubo `inactive`
+  // durante un paywall abierto y el resultado final fue compra/cancel/error.
+  if (
+    heuristicSnapshot.paywallIsOpen &&
+    heuristicSnapshot.sawInactiveDuringPaywall &&
+    !heuristicSnapshot.sawPurchaseStartedDuringPaywall &&
+    !heuristicSnapshot.sawPurchaseTerminalDuringPaywall &&
+    shouldEmitHeuristicPurchaseStarted(result)
+  ) {
+    notifyPurchaseStarted({
+      platform: 'ios',
+      store: 'app_store',
+      ...(typeof heuristicSnapshot.inactiveAt === 'number' &&
+      Number.isFinite(heuristicSnapshot.inactiveAt) &&
+      heuristicSnapshot.inactiveAt > 0
+        ? { timestamp: heuristicSnapshot.inactiveAt }
+        : {}),
+    } as any);
+  }
 }
 
 const PATCHABLE_METHODS = [
@@ -280,6 +433,149 @@ function inferRestoreProductIds(result: unknown): string[] | undefined {
   return undefined;
 }
 
+function defaultPaywallPurchaseContext(): {
+  platform: 'ios' | 'android';
+  store: 'app_store' | 'google_play';
+} {
+  const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+  const store = platform === 'ios' ? 'app_store' : 'google_play';
+  return { platform, store };
+}
+
+/** Evento nativo de `onPurchaseStarted` (`{ packageBeingPurchased }`). */
+function productIdFromPaywallPurchaseStartedEvent(event: unknown): string | undefined {
+  const rec = asRecord(event);
+  const pkg = asRecord(rec?.packageBeingPurchased);
+  if (pkg) {
+    return purchaseProductIdFromArgs('purchasePackage', [pkg]);
+  }
+  return undefined;
+}
+
+function inferPriceCurrencyFromPaywallCompletedEvent(
+  event: unknown
+): { price?: number; currency?: string } {
+  const r = asRecord(event);
+  if (!r) return {};
+  for (const raw of [
+    r.storeProduct,
+    r.product,
+    r.transaction,
+    r.storeTransaction,
+  ]) {
+    const x = extractPriceCurrencyFromProductLike(raw);
+    if (x.price != null || x.currency) return x;
+  }
+  return {};
+}
+
+function purchasesErrorFromPaywallEvent(event: unknown): unknown {
+  const rec = asRecord(event);
+  if (!rec) return event;
+  return rec.error ?? event;
+}
+
+function chainPaywallCallback(
+  original: unknown,
+  run: (...args: unknown[]) => void
+): (...args: unknown[]) => void {
+  return (...args: unknown[]) => {
+    run(...args);
+    if (typeof original === 'function') {
+      (original as (...args: unknown[]) => void)(...args);
+    }
+  };
+}
+
+/**
+ * Compone callbacks de `RevenueCatUI.Paywall` con analítica SignalFox.
+ */
+function buildPaywallPurchaseAnalyticsProps(
+  props: Record<string, unknown>,
+  Purchases: any
+): Record<string, unknown> {
+  const { platform, store } = defaultPaywallPurchaseContext();
+  const out: Record<string, unknown> = {};
+
+  out.onPurchaseStarted = chainPaywallCallback(
+    props.onPurchaseStarted,
+    (event: unknown) => {
+      const productId = productIdFromPaywallPurchaseStartedEvent(event);
+      markHeuristicPaywallPurchaseStartedSeen();
+      notifyPurchaseStarted({
+        productId,
+        platform,
+        store,
+      } as any);
+    }
+  );
+
+  out.onPurchaseCompleted = chainPaywallCallback(
+    props.onPurchaseCompleted,
+    (event: unknown) => {
+      const fallbackId = productIdFromPaywallPurchaseStartedEvent(event);
+      const { price, currency } = inferPriceCurrencyFromPaywallCompletedEvent(event);
+      markHeuristicPaywallPurchaseTerminalSeen();
+      notifyPurchaseCompleted({
+        productId: inferProductIdFromResult(event, fallbackId),
+        platform,
+        store,
+        ...(price != null && Number.isFinite(price) ? { price } : {}),
+        ...(currency ? { currency } : {}),
+      } as any);
+    }
+  );
+
+  out.onPurchaseCancelled = chainPaywallCallback(
+    props.onPurchaseCancelled,
+    () => {
+      markHeuristicPaywallPurchaseTerminalSeen();
+      notifyPurchaseCancelled({
+        platform,
+        store,
+      } as any);
+    }
+  );
+
+  out.onPurchaseError = chainPaywallCallback(
+    props.onPurchaseError,
+    (event: unknown) => {
+      const err = purchasesErrorFromPaywallEvent(event);
+      const productId = productIdFromPaywallPurchaseStartedEvent(event);
+      markHeuristicPaywallPurchaseTerminalSeen();
+      if (isRevenueCatUserCancellation(err, Purchases)) {
+        notifyPurchaseCancelled({
+          productId,
+          platform,
+          store,
+        } as any);
+      } else {
+        const error = asRecord(err);
+        notifyPurchaseFailed({
+          productId,
+          platform,
+          store,
+          errorCode: pickString(error?.readableErrorCode, error?.code),
+          errorMessage: pickString(error?.message, error?.description),
+        } as any);
+      }
+    }
+  );
+
+  out.onRestoreCompleted = chainPaywallCallback(
+    props.onRestoreCompleted,
+    (event: unknown) => {
+      notifyRestoreCompleted({
+        platform,
+        store,
+        restoredProductIds: inferRestoreProductIds(event),
+      } as any);
+    }
+  );
+
+  return out;
+}
+
 function installRevenueCatPurchaseHooks(Purchases: any): {
   teardown: () => void;
   patchedMethods: string[];
@@ -307,6 +603,7 @@ function installRevenueCatPurchaseHooks(Purchases: any): {
           productId: productId ?? '(sin id)',
         });
       }
+      markHeuristicPaywallPurchaseStartedSeen();
       notifyPurchaseStarted({
         productId,
         platform,
@@ -320,6 +617,7 @@ function installRevenueCatPurchaseHooks(Purchases: any): {
             name,
             args
           );
+          markHeuristicPaywallPurchaseTerminalSeen();
           notifyPurchaseCompleted({
             productId: inferProductIdFromResult(result, productId),
             platform,
@@ -330,6 +628,7 @@ function installRevenueCatPurchaseHooks(Purchases: any): {
           return result;
         },
         (err: unknown) => {
+          markHeuristicPaywallPurchaseTerminalSeen();
           if (isRevenueCatUserCancellation(err, Purchases)) {
             notifyPurchaseCancelled({
               productId,
@@ -391,7 +690,8 @@ function installRevenueCatPurchaseHooks(Purchases: any): {
 }
 
 function installRevenueCatPaywallHooks(
-  RevenueCatUI: any
+  RevenueCatUI: any,
+  purchasesModule?: any
 ): (() => void) | null {
   if (!RevenueCatUI || typeof RevenueCatUI !== 'function') {
     return null;
@@ -404,23 +704,31 @@ function installRevenueCatPaywallHooks(
     if (typeof original !== 'function') continue;
 
     restoreEntries.push([name, original]);
-    RevenueCatUI[name] = (...args: unknown[]) => {
+    RevenueCatUI[name] = async (...args: unknown[]) => {
       const trigger = `revenuecat_ui.${name}`;
-      openRevenueCatPaywallSource(trigger);
+      const openedAt = Date.now();
+
+      if (name === 'presentPaywall') {
+        openRevenueCatPaywallSource(trigger, openedAt);
+      }
+      await beginHeuristicPaywallSession(openedAt);
 
       try {
-        return Promise.resolve(original.apply(RevenueCatUI, args)).then(
-          (result) => {
-            closeRevenueCatPaywallSource(trigger);
-            return result;
-          },
-          (error) => {
-            closeRevenueCatPaywallSource(trigger);
-            throw error;
-          }
-        );
+        const result = await Promise.resolve(original.apply(RevenueCatUI, args));
+        await finalizeHeuristicPaywallSession({
+          method: name,
+          result,
+          trigger,
+          openedAt,
+        });
+        return result;
       } catch (error) {
-        closeRevenueCatPaywallSource(trigger);
+        await finalizeHeuristicPaywallSession({
+          method: name,
+          result: PAYWALL_RESULT_ERROR,
+          trigger,
+          openedAt,
+        });
         throw error;
       }
     };
@@ -455,9 +763,14 @@ function installRevenueCatPaywallHooks(
       render(): React.ReactNode {
         const props = this.props as Record<string, unknown>;
         const originalOnDismiss = props.onDismiss;
+        const listenerProps = buildPaywallPurchaseAnalyticsProps(
+          props,
+          purchasesModule
+        );
 
         return React.createElement(OriginalPaywall, {
           ...props,
+          ...listenerProps,
           onDismiss: (...args: unknown[]) => {
             this.closeTrackingIfNeeded('revenuecat_ui.Paywall.onDismiss');
             if (typeof originalOnDismiss === 'function') {
@@ -535,7 +848,14 @@ export function startRevenueCatPurchaseAnalytics(
 
     const RevenueCatUI = options.revenueCatUI;
     if (RevenueCatUI != null && typeof RevenueCatUI === 'function') {
-      const paywallTeardown = installRevenueCatPaywallHooks(RevenueCatUI);
+      const paywallPurchases =
+        isPurchasesModule(options.purchases) && options.purchases != null
+          ? (options.purchases as any)
+          : undefined;
+      const paywallTeardown = installRevenueCatPaywallHooks(
+        RevenueCatUI,
+        paywallPurchases
+      );
       if (paywallTeardown) {
         teardowns.push(paywallTeardown);
         console.log(
@@ -562,4 +882,5 @@ export function stopRevenueCatPurchaseAnalyticsIfAvailable(): void {
   rcTeardown?.();
   rcTeardown = null;
   activeRevenueCatPaywallSources = 0;
+  resetHeuristicPaywallState();
 }

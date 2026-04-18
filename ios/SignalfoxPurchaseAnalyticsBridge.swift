@@ -106,9 +106,16 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
   private var isRunning: Bool = false
   private var transactionUpdatesTask: Task<Void, Never>?
   private var paymentQueueObserver: SKPaymentTransactionObserver?
+  private let paywallStateLock = NSLock()
+  private var lifecycleObservers: [NSObjectProtocol] = []
+  private var heuristicPaywallIsOpen: Bool = false
+  private var heuristicPaywallOpenedAtMs: Double?
+  private var heuristicSawInactiveDuringPaywall: Bool = false
+  private var heuristicInactiveAtMs: Double?
 
   private override init() {
     super.init()
+    registerLifecycleObserversIfNeeded()
   }
 
   @objc
@@ -186,6 +193,92 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
         resolve(nil)
       }
     }
+  }
+
+  @objc
+  func beginHeuristicPaywallSession() {
+    let nowMs = Date().timeIntervalSince1970 * 1000
+    paywallStateLock.lock()
+    heuristicPaywallIsOpen = true
+    heuristicPaywallOpenedAtMs = nowMs
+    heuristicSawInactiveDuringPaywall = false
+    heuristicInactiveAtMs = nil
+    paywallStateLock.unlock()
+
+    NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] beginHeuristicPaywallSession openedAt=%.0f", nowMs)
+  }
+
+  @objc
+  func endHeuristicPaywallSession() -> [String: Any] {
+    paywallStateLock.lock()
+    let snapshot: [String: Any] = [
+      "paywallIsOpen": heuristicPaywallIsOpen,
+      "paywallOpenedAt": heuristicPaywallOpenedAtMs as Any,
+      "sawInactiveDuringPaywall": heuristicSawInactiveDuringPaywall,
+      "inactiveAt": heuristicInactiveAtMs as Any
+    ]
+    heuristicPaywallIsOpen = false
+    heuristicPaywallOpenedAtMs = nil
+    heuristicSawInactiveDuringPaywall = false
+    heuristicInactiveAtMs = nil
+    paywallStateLock.unlock()
+
+    NSLog(
+      "[SignalfoxPurchaseAnalyticsBridge][iOS] endHeuristicPaywallSession sawInactive=%@ inactiveAt=%@",
+      String(describing: snapshot["sawInactiveDuringPaywall"] ?? false),
+      String(describing: snapshot["inactiveAt"] ?? "nil")
+    )
+    return snapshot
+  }
+
+  private func registerLifecycleObserversIfNeeded() {
+    guard lifecycleObservers.isEmpty else { return }
+
+    lifecycleObservers.append(
+      NotificationCenter.default.addObserver(
+        forName: UIApplication.willResignActiveNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.noteInactiveDuringHeuristicPaywall(reason: "UIApplication.willResignActiveNotification")
+      }
+    )
+
+    if #available(iOS 13.0, *) {
+      lifecycleObservers.append(
+        NotificationCenter.default.addObserver(
+          forName: UIScene.willDeactivateNotification,
+          object: nil,
+          queue: .main
+        ) { [weak self] _ in
+          self?.noteInactiveDuringHeuristicPaywall(reason: "UIScene.willDeactivateNotification")
+        }
+      )
+    }
+  }
+
+  private func noteInactiveDuringHeuristicPaywall(reason: String) {
+    let nowMs = Date().timeIntervalSince1970 * 1000
+    paywallStateLock.lock()
+    guard heuristicPaywallIsOpen else {
+      paywallStateLock.unlock()
+      return
+    }
+
+    heuristicSawInactiveDuringPaywall = true
+    if heuristicInactiveAtMs == nil {
+      heuristicInactiveAtMs = nowMs
+    }
+    let openedAt = heuristicPaywallOpenedAtMs
+    let inactiveAt = heuristicInactiveAtMs
+    paywallStateLock.unlock()
+
+    NSLog(
+      "[SignalfoxPurchaseAnalyticsBridge][iOS] heuristic paywall inactive reason=%@ openedAt=%@ inactiveAt=%@",
+      reason,
+      openedAt != nil ? String(format: "%.0f", openedAt!) : "nil",
+      inactiveAt != nil ? String(format: "%.0f", inactiveAt!) : "nil"
+    )
   }
 }
 
@@ -466,4 +559,3 @@ private extension SignalfoxPurchaseAnalyticsTracker {
     return restoredProductIds
   }
 }
-

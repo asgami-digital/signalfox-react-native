@@ -1,6 +1,11 @@
 import React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { getActiveModalId, resetModalStack } from '../../core/modalStack';
+import {
+  getActiveModalId,
+  getModalStackSnapshot,
+  modalStackPush,
+  resetModalStack,
+} from '../../core/modalStack';
 import {
   applyModalPatch,
   reactNativeModalPatchIntegration,
@@ -78,6 +83,9 @@ describe('reactNativeModalPatch', () => {
       expect.objectContaining({
         type: 'modal_open',
         signalFoxId: 'rating-modal',
+        payload: expect.objectContaining({
+          parent_modal: null,
+        }),
       })
     );
     expect(getActiveModalId()).toBe('rating-modal');
@@ -159,6 +167,9 @@ describe('reactNativeModalPatch', () => {
       expect.objectContaining({
         type: 'modal_close',
         signalFoxId: 'result-modal',
+        payload: expect.objectContaining({
+          parent_modal: null,
+        }),
       })
     );
     expect(getActiveModalId()).toBeNull();
@@ -193,6 +204,64 @@ describe('reactNativeModalPatch', () => {
     });
 
     expect(trackEvent).toHaveBeenCalledTimes(1);
+
+    cleanup();
+  });
+
+  it('apila un modal nativo sobre un navigation modal existente', () => {
+    const { Modal, cleanup, trackEvent } = setupPatchedModal();
+    let tree!: ReactTestRenderer;
+
+    modalStackPush({
+      id: 'navigation-modal',
+      stackKey: 'navigation-modal-key',
+      source: 'react_navigation',
+    });
+
+    act(() => {
+      tree = create(<Modal visible signalFoxId="native-modal" />);
+    });
+
+    expect(trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxId: 'native-modal',
+        payload: expect.objectContaining({
+          parent_modal: 'navigation-modal',
+        }),
+      })
+    );
+    expect(getModalStackSnapshot()).toEqual([
+      expect.objectContaining({
+        id: 'navigation-modal',
+        source: 'react_navigation',
+      }),
+      expect.objectContaining({
+        id: 'native-modal',
+        source: 'react_native_modal',
+      }),
+    ]);
+
+    act(() => {
+      tree.update(<Modal visible={false} signalFoxId="native-modal" />);
+    });
+
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: 'modal_close',
+        signalFoxId: 'native-modal',
+        payload: expect.objectContaining({
+          parent_modal: 'navigation-modal',
+        }),
+      })
+    );
+    expect(getModalStackSnapshot()).toEqual([
+      expect.objectContaining({
+        id: 'navigation-modal',
+        source: 'react_navigation',
+      }),
+    ]);
 
     cleanup();
   });

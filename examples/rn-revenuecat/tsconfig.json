@@ -1,0 +1,16 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "customConditions": ["react-native"],
+    "paths": {
+      "@asgami-digital/signalfox-react-native": [
+        "../../src/index.tsx"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "index.js"
+  ]
+}

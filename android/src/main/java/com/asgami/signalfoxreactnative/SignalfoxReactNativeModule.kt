@@ -1,5 +1,6 @@
 package com.asgami.signalfoxreactnative
 
+import android.content.Context
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import android.os.Build
@@ -10,7 +11,7 @@ class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
 
   private val appContext = reactContext.applicationContext
   private val prefs by lazy {
-    appContext.getSharedPreferences("signalfox_react_native", ReactApplicationContext.MODE_PRIVATE)
+    appContext.getSharedPreferences("signalfox_react_native", Context.MODE_PRIVATE)
   }
 
   private val purchaseTracker by lazy {
@@ -84,6 +85,31 @@ class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
       purchaseTracker.reconcileNativePurchases(promise)
     } catch (e: Exception) {
       promise.reject("RECONCILE_NATIVE_PURCHASES_ERROR", "Failed to reconcile native purchases", e)
+    }
+  }
+
+  override fun beginHeuristicPaywallSession(promise: Promise) {
+    try {
+      purchaseTracker.beginHeuristicPaywallSession()
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject(
+        "BEGIN_HEURISTIC_PAYWALL_SESSION_ERROR",
+        "Failed to begin heuristic paywall session",
+        e
+      )
+    }
+  }
+
+  override fun endHeuristicPaywallSession(promise: Promise) {
+    try {
+      promise.resolve(purchaseTracker.endHeuristicPaywallSession())
+    } catch (e: Exception) {
+      promise.reject(
+        "END_HEURISTIC_PAYWALL_SESSION_ERROR",
+        "Failed to end heuristic paywall session",
+        e
+      )
     }
   }
 

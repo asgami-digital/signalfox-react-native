@@ -51,15 +51,17 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   const latestTargetIdRef = useRef<string | null>(null);
   const latestTargetDisplayNameRef = useRef<string | null>(null);
 
-  console.log('PatchedModal props', props);
-
   const emitOpenOnce = (targetId: string | null, targetName: string | null) => {
     if (openEmittedRef.current) return;
     openEmittedRef.current = true;
     closeEmittedRef.current = false;
 
+    let parentModal: string | null = null;
     if (typeof targetId === 'string' && targetId.length > 0) {
-      modalStackPush(targetId);
+      parentModal = modalStackPush({
+        id: targetId,
+        source: 'react_native_modal',
+      });
     }
 
     const track = modalPatchTrackRef.current;
@@ -73,6 +75,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
         modalName: targetId,
         source: 'react_native_modal',
         kind: 'component_modal',
+        parent_modal: parentModal,
       },
     });
   };
@@ -87,9 +90,10 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     openEmittedRef.current = false;
 
     // Para modal_close, el parent debe ser el modal "anterior" (stack después del pop).
-    if (typeof targetId === 'string' && targetId.length > 0) {
-      modalStackPop(targetId);
-    }
+    const parentModal =
+      typeof targetId === 'string' && targetId.length > 0
+        ? modalStackPop(targetId)
+        : null;
 
     const track = modalPatchTrackRef.current;
     if (!track) return;
@@ -102,6 +106,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
         modalName: targetId,
         source: 'react_native_modal',
         kind: 'component_modal',
+        parent_modal: parentModal,
       },
     });
   };
@@ -167,13 +172,10 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
 }
 
 export function applyModalPatch(): void {
-  console.log("caca")
   const RN = require('react-native');
   if ((RN as any)[RN_MODAL_PATCH_MARKER]) return;
-  console.log("de");
   (RN as any)[RN_MODAL_PATCH_MARKER] = true;
   OriginalModal = RN.Modal;
-  console.log("vaca")
 
   try {
     Object.defineProperty(RN, 'Modal', {
@@ -183,7 +185,6 @@ export function applyModalPatch(): void {
         return PatchedModal;
       },
     });
-    console.log('Modal patch applied');
   } catch (error) {
     console.error('Error applying modal patch', error);
     // ignore

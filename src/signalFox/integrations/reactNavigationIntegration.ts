@@ -12,12 +12,16 @@ import type {
 import {
   getActiveRouteInfo,
   isRoutePresentedAsModal,
-  type ActiveRouteInfo,
 } from '../utils/getActiveRouteInfo';
 import {
   getActiveRouteName,
   type NavStateLike,
 } from '../utils/getActiveRouteName';
+import {
+  getActiveModalId,
+  modalStackPop,
+  modalStackPush,
+} from '../core/modalStack';
 
 // Interval para fallback mínimo si no se puede adjuntar un listener del navigator.
 const POLL_INTERVAL_MS = 350;
@@ -86,12 +90,6 @@ function buildActiveRouteBranchKey(state: NavStateLike | undefined): string {
   return JSON.stringify(segments);
 }
 
-interface RouteChainEntry {
-  name: string;
-  presentation?: string;
-  selectedByNavigatorType?: string;
-}
-
 interface NavigatorContextPayload {
   root_navigator: string | null;
   active_tab: string | null;
@@ -109,7 +107,10 @@ export interface NavigationRefLike {
   current: {
     getRootState(): unknown;
     isReady?(): boolean;
+    getCurrentOptions?(): unknown;
   } | null;
+
+  getCurrentOptions?: () => unknown;
 
   /**
    * En `createNavigationContainerRef` / NavigationContainer: `state`, `ready`,
@@ -121,7 +122,6 @@ export interface NavigationRefLike {
 
 export interface ReactNavigationIntegrationOptions {
   navigationRef: NavigationRefLike;
-  getRoutePresentation?: (routeName: string) => string | undefined;
 }
 
 function emitScreenView(
@@ -185,6 +185,40 @@ function getStackPathToFocused(state: NavStateLike | undefined): string[] {
   return [route.name];
 }
 
+function getStackEntriesToFocused(
+  state: NavStateLike | undefined
+): Array<{ name: string; key?: string }> {
+  if (
+    !state?.routes?.length ||
+    state.index < 0 ||
+    state.index >= state.routes.length
+  ) {
+    return [];
+  }
+
+  const navType = typeof state.type === 'string' ? state.type : '';
+
+  if (navType === 'stack') {
+    const end = state.index + 1;
+    return state.routes.slice(0, end).map((route) => ({
+      name: route.name,
+      key: route.key,
+    }));
+  }
+
+  const route = state.routes[state.index];
+  if (!route) return [];
+  const nested = route.state as NavStateLike | undefined;
+  if (nested?.routes?.length) {
+    const inner = getStackEntriesToFocused(nested);
+    if (inner.length > 0) {
+      return inner;
+    }
+  }
+
+  return [{ name: route.name, key: route.key }];
+}
+
 /**
  * Pestaña activa: primer navigator tipo tab encontrado al bajar por el estado.
  */
@@ -206,35 +240,6 @@ function getActiveTabRouteName(state: NavStateLike | undefined): string | null {
     return getActiveTabRouteName(nested);
   }
   return null;
-}
-
-function getActiveRouteChain(
-  state: NavStateLike | undefined,
-  getPresentationForRoute?: (routeName: string) => string | undefined
-): RouteChainEntry[] {
-  if (
-    !state?.routes?.length ||
-    state.index < 0 ||
-    state.index >= state.routes.length
-  ) {
-    return [];
-  }
-
-  const route = state.routes[state.index];
-  if (!route) return [];
-  const navigatorType = typeof state.type === 'string' ? state.type : undefined;
-  const current: RouteChainEntry = {
-    name: route.name,
-    presentation: getPresentationForRoute?.(route.name),
-    selectedByNavigatorType: navigatorType,
-  };
-
-  const nested = route.state as NavStateLike | undefined;
-  if (!nested?.routes?.length) {
-    return [current];
-  }
-
-  return [current, ...getActiveRouteChain(nested, getPresentationForRoute)];
 }
 
 /**
@@ -260,44 +265,121 @@ function getRootNavigatorIdentity(
 
 function buildNavigatorContext(
   state: NavStateLike | undefined,
-  getPresentationForRoute:
-    | ((routeName: string) => string | undefined)
-    | undefined,
-  currentInfo: ActiveRouteInfo
+  currentPresentation: string | null
 ): NavigatorContextPayload {
-  const chain = getActiveRouteChain(state, getPresentationForRoute);
-
   const rootNavigator = getRootNavigatorIdentity(state);
-
   const stackPath = getStackPathToFocused(state);
   const activeTab = getActiveTabRouteName(state);
-
-  const parentModal =
-    [...chain]
-      .reverse()
-      .slice(1)
-      .find((entry) => isRoutePresentedAsModal(entry.presentation))?.name ??
-    null;
 
   return {
     root_navigator: rootNavigator,
     active_tab: activeTab,
     stack_path: stackPath,
-    presentation: currentInfo.presentation ?? null,
-    parent_modal: parentModal,
+    presentation: currentPresentation,
+    parent_modal: getActiveModalId(),
   };
+}
+
+interface FocusedRouteSnapshot {
+  name: string;
+  key: string;
+  presentation: string | null;
+  isModal: boolean;
+}
+
+function normalizePresentation(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function getCurrentPresentation(
+  navigationRef: NavigationRefLike
+): string | null {
+  const fromRef =
+    typeof navigationRef.getCurrentOptions === 'function'
+      ? navigationRef.getCurrentOptions()
+      : undefined;
+  const fromCurrent =
+    typeof navigationRef.current?.getCurrentOptions === 'function'
+      ? navigationRef.current.getCurrentOptions()
+      : undefined;
+  const options =
+    fromRef && typeof fromRef === 'object' ? fromRef : fromCurrent;
+
+  return normalizePresentation(
+    options && typeof options === 'object'
+      ? (options as { presentation?: unknown }).presentation
+      : undefined
+  );
+}
+
+function emitNavigationModalOpen(
+  core: IAnalyticsCore,
+  route: FocusedRouteSnapshot,
+  previousScreenName: string | undefined
+): void {
+  const parentModal = modalStackPush({
+    id: route.name,
+    stackKey: route.key,
+    source: 'react_navigation',
+  });
+
+  core.trackEvent({
+    type: 'modal_open',
+    signalFoxId: route.name,
+    target_type: 'modal',
+    payload: {
+      modalName: route.name,
+      source: 'react_navigation',
+      kind: 'screen_modal',
+      previous_screen_name: previousScreenName ?? null,
+      previousScreen: previousScreenName ?? null,
+      currentScreen: route.name,
+      screen_name: route.name,
+      presentation: route.presentation,
+      parent_modal: parentModal,
+    },
+  });
+}
+
+function emitNavigationModalClose(
+  core: IAnalyticsCore,
+  route: FocusedRouteSnapshot,
+  currentScreenName: string | undefined
+): void {
+  const parentModal = modalStackPop(route.key);
+
+  core.trackEvent({
+    type: 'modal_close',
+    signalFoxId: route.name,
+    target_type: 'modal',
+    payload: {
+      modalName: route.name,
+      source: 'react_navigation',
+      kind: 'screen_modal',
+      previous_screen_name: route.name,
+      previousScreen: route.name,
+      currentScreen: currentScreenName ?? null,
+      screen_name: currentScreenName ?? null,
+      presentation: route.presentation,
+      parent_modal: parentModal,
+    },
+  });
 }
 
 export function reactNavigationIntegration(
   options: ReactNavigationIntegrationOptions
 ): AnalyticsIntegration {
-  const { navigationRef, getRoutePresentation } = options;
+  const { navigationRef } = options;
 
   return {
     name: 'reactNavigation',
 
     setup(core: IAnalyticsCore, _context): () => void {
       let previousScreenName: string | undefined;
+      let previousRouteSnapshot: FocusedRouteSnapshot | null = null;
+      let previousStackRouteKeys = new Set<string>();
       let lastActiveBranchKey: string | null = null;
       let pendingNavigationTimestamp: number | null = null;
       let bootstrapInterval: ReturnType<typeof setInterval> | null = null;
@@ -342,16 +424,56 @@ export function reactNavigationIntegration(
           return;
         }
 
-        const currentInfo = getActiveRouteInfo(state, getRoutePresentation);
+        const currentInfo = getActiveRouteInfo(state);
         if (!currentInfo) {
           pendingNavigationTimestamp = null;
           core.clearNavigationIntentPending?.();
           return;
         }
+        const currentPresentation = getCurrentPresentation(navigationRef);
+        const currentRouteKey =
+          typeof currentInfo.key === 'string' && currentInfo.key.length > 0
+            ? currentInfo.key
+            : activeBranchKey;
+        const currentRouteSnapshot: FocusedRouteSnapshot = {
+          name: currentInfo.name,
+          key: currentRouteKey,
+          presentation: currentPresentation,
+          isModal: isRoutePresentedAsModal(currentPresentation ?? undefined),
+        };
+        const currentStackEntries = getStackEntriesToFocused(state);
+        const currentStackRouteKeys = new Set(
+          currentStackEntries
+            .map((entry) =>
+              typeof entry.key === 'string' && entry.key.length > 0
+                ? entry.key
+                : null
+            )
+            .filter((entryKey): entryKey is string => entryKey != null)
+        );
+
+        if (
+          previousRouteSnapshot?.isModal &&
+          (!currentRouteSnapshot.isModal ||
+            !currentStackRouteKeys.has(previousRouteSnapshot.key))
+        ) {
+          emitNavigationModalClose(
+            core,
+            previousRouteSnapshot,
+            currentRouteSnapshot.name
+          );
+        }
+
+        if (
+          currentRouteSnapshot.isModal &&
+          !previousStackRouteKeys.has(currentRouteSnapshot.key)
+        ) {
+          emitNavigationModalOpen(core, currentRouteSnapshot, previousScreenName);
+        }
+
         const navigatorContext = buildNavigatorContext(
           state,
-          getRoutePresentation,
-          currentInfo
+          currentRouteSnapshot.presentation
         );
 
         const intentTs = pendingNavigationTimestamp;
@@ -373,25 +495,9 @@ export function reactNavigationIntegration(
           );
         }
 
-        // Temporalmente desactivado:
-        // no emitimos modal_open/modal_close desde reactNavigationIntegration
-        // para evitar cierres/aperturas falsos hasta revisar la lógica.
-        //
-        // if (!prevModal && currentModal) {
-        //   emitModalOpen(core, currentInfo.name, previousScreenName);
-        // } else if (prevModal && !currentModal) {
-        //   emitModalClose(core, previousRouteInfo!.name, activeName);
-        // } else if (
-        //   prevModal &&
-        //   currentModal &&
-        //   previousRouteInfo &&
-        //   previousRouteInfo.name !== currentInfo.name
-        // ) {
-        //   emitModalClose(core, previousRouteInfo.name, activeName);
-        //   emitModalOpen(core, currentInfo.name, previousRouteInfo.name);
-        // }
-
         previousScreenName = activeName;
+        previousRouteSnapshot = currentRouteSnapshot;
+        previousStackRouteKeys = currentStackRouteKeys;
         core.clearNavigationIntentPending?.();
         // Primera pantalla resuelta: dejamos de hacer polling de arranque.
         stopBootstrapPolling();

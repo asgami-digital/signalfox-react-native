@@ -20,7 +20,6 @@
     "ios",
     "cpp",
     "*.podspec",
-    "react-native.config.js",
     "!ios/build",
     "!android/build",
     "!android/gradle",
@@ -33,8 +32,14 @@
     "!**/.*"
   ],
   "scripts": {
-    "example": "yarn workspace @asgami/signalfox-react-native-example",
-    "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
+    "example": "yarn workspace @asgami/signalfox-rn-revenuecat start",
+    "example:rn-revenuecat": "yarn workspace @asgami/signalfox-rn-revenuecat start",
+    "example:rn-revenuecat:ios": "yarn workspace @asgami/signalfox-rn-revenuecat ios",
+    "example:rn-revenuecat:android": "yarn workspace @asgami/signalfox-rn-revenuecat android",
+    "example:expo-rniap": "npm --prefix ./examples/expo-rniap run start",
+    "example:expo-rniap:ios": "npm --prefix ./examples/expo-rniap run ios",
+    "example:expo-rniap:android": "npm --prefix ./examples/expo-rniap run android",
+    "clean": "del-cli android/build examples/rn-revenuecat/android/build examples/rn-revenuecat/android/app/build examples/rn-revenuecat/ios/build lib",
     "prepare": "bob build && node ./scripts/ensure-rn-augmentation-in-lib-types.mjs",
     "typecheck": "tsc",
     "test": "jest",
@@ -50,7 +55,7 @@
     "type": "git",
     "url": "git+https://github.com/asgami-digital/signalfox-react-native.git"
   },
-  "author": "Asgami <contact@asgami.com@asgami.com> (https://asgami.com)",
+  "author": "Asgami <arturo.sancho@asgami.com> (https://asgami.com)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/asgami-digital/signalfox-react-native/issues"
@@ -97,7 +102,7 @@
     }
   },
   "workspaces": [
-    "example"
+    "examples/rn-revenuecat"
   ],
   "packageManager": "yarn@4.11.0",
   "react-native-builder-bob": {
@@ -129,7 +134,7 @@
   "jest": {
     "preset": "react-native",
     "modulePathIgnorePatterns": [
-      "<rootDir>/example/node_modules",
+      "<rootDir>/examples/.*/node_modules",
       "<rootDir>/lib/"
     ]
   },

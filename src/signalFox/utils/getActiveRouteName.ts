@@ -14,7 +14,7 @@ export interface NavStateLike {
   id?: string;
   /** Tipo del navigator (p. ej. stack, tab, drawer). Lo expone React Navigation en el state. */
   type?: string;
-  routes: Array<{ name: string; state?: NavStateLike }>;
+  routes: Array<{ name: string; key?: string; state?: NavStateLike }>;
   index: number;
 }
 
