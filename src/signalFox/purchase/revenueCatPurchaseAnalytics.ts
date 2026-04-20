@@ -223,7 +223,8 @@ async function finalizeHeuristicPaywallSession(params: {
     result === PAYWALL_RESULT_CANCELLED &&
     heuristicSnapshot.paywallIsOpen &&
     !heuristicSnapshot.sawPurchaseTerminalDuringPaywall &&
-    (heuristicSnapshot.sawPurchaseStartedDuringPaywall || emittedStartedInFinalize)
+    (heuristicSnapshot.sawPurchaseStartedDuringPaywall ||
+      emittedStartedInFinalize)
   ) {
     notifyPurchaseCancelled({
       platform,

@@ -495,7 +495,7 @@ describe('revenueCatPurchaseAnalytics', () => {
       })
     );
     const purchaseProduct = jest.fn(
-      () => new Promise<unknown>(() => undefined)
+      (_productId?: string) => new Promise<unknown>(() => undefined)
     );
     const Purchases = { purchaseProduct };
 

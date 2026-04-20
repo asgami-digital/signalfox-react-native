@@ -1,4 +1,9 @@
-import { SIGNALFOX_EXAMPLE_API_KEY, RN_REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT_ID, REVENUECAT_PRODUCT_ID } from '@env';
+import {
+  SIGNALFOX_EXAMPLE_API_KEY,
+  RN_REVENUECAT_API_KEY,
+  REVENUECAT_ENTITLEMENT_ID,
+  REVENUECAT_PRODUCT_ID,
+} from '@env';
 
 function normalize(value: string | undefined): string {
   return (value ?? '').trim();

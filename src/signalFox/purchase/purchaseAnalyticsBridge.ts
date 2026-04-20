@@ -36,19 +36,21 @@ function clearPendingPurchaseProductId(reason: string): void {
   pendingPurchaseProductId = null;
 }
 
-function attachPendingProductIdToJsPayload<T extends Record<string, unknown> | undefined>(
-  payload: T
-): T {
+function attachPendingProductIdToJsPayload<
+  T extends Record<string, unknown> | undefined
+>(payload: T): T {
   if (
     pendingPurchaseProductId == null ||
-    (typeof payload?.productId === 'string' && payload.productId.trim().length > 0)
+    (typeof payload?.productId === 'string' &&
+      payload.productId.trim().length > 0)
   ) {
     return payload;
   }
-  return {
+  const payloadWithProductId = {
     ...(payload ?? {}),
     productId: pendingPurchaseProductId,
-  } as T;
+  };
+  return payloadWithProductId as T & typeof payloadWithProductId;
 }
 
 function debugLog(...args: unknown[]): void {

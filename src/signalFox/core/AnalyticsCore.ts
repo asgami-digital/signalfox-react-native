@@ -408,7 +408,9 @@ export class AnalyticsCore implements IAnalyticsCore {
   private purchaseProductIdFromEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): string | null {
-    const direct = this.pickOptionalString((event as { productId?: unknown }).productId);
+    const direct = this.pickOptionalString(
+      (event as { productId?: unknown }).productId
+    );
     if (direct) return direct;
     const payload =
       event.payload && typeof event.payload === 'object'
@@ -420,8 +422,12 @@ export class AnalyticsCore implements IAnalyticsCore {
   private pruneRecentPurchaseSurfaceContexts(referenceTs: number): void {
     while (this.recentPurchaseSurfaceContexts.length > 0) {
       const first = this.recentPurchaseSurfaceContexts[0];
+      if (!first) {
+        break;
+      }
       if (
-        referenceTs - first.startedAt <= PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS
+        referenceTs - first.startedAt <=
+        PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS
       ) {
         break;
       }
@@ -457,6 +463,9 @@ export class AnalyticsCore implements IAnalyticsCore {
 
     for (let i = this.recentPurchaseSurfaceContexts.length - 1; i >= 0; i--) {
       const candidate = this.recentPurchaseSurfaceContexts[i];
+      if (!candidate) {
+        continue;
+      }
       if (candidate.productId === productId) {
         return candidate;
       }
