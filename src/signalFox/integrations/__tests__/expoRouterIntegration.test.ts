@@ -44,7 +44,7 @@ function createNavigationRef(
 }
 
 describe('expoRouterIntegration', () => {
-  it('usa la logica de React Navigation y emite screen_view con intent timestamp', () => {
+  it('uses React Navigation logic and emits screen_view with intent timestamp', () => {
     jest.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(2000);
 
     const stateRef = {

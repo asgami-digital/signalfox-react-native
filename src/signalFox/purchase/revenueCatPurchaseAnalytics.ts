@@ -122,7 +122,7 @@ async function beginHeuristicPaywallSession(openedAt: number): Promise<void> {
   try {
     await SignalfoxReactNative.beginHeuristicPaywallSession?.();
   } catch {
-    // Heurística best-effort: si el bridge nativo falla, seguimos con modal analytics.
+    // Best-effort heuristic: if the native bridge fails, continue with modal analytics.
   }
 }
 
@@ -151,7 +151,7 @@ async function endHeuristicPaywallSession(): Promise<{
         snapshot.inactiveAt = nativeSnapshot.inactiveAt;
       }
     } catch {
-      // Heurística best-effort: si el bridge nativo falla, no emitimos started heurístico.
+      // Best-effort heuristic: if the native bridge fails, do not emit heuristic started.
     }
   }
 
@@ -194,9 +194,11 @@ async function finalizeHeuristicPaywallSession(params: {
   if (method === 'presentPaywallIfNeeded') {
     openRevenueCatPaywallSource(trigger, openedAt);
   }
-  closeRevenueCatPaywallSource(trigger);
 
-  // `purchase_started` es heurístico: lo inferimos si hubo `inactive`
+  const { platform, store } = defaultPaywallPurchaseContext();
+  let emittedStartedInFinalize = false;
+
+  // `purchase_started` is heuristic: we infer it if there was `inactive`
   // durante un paywall abierto y el resultado final fue compra/cancel/error.
   if (
     heuristicSnapshot.paywallIsOpen &&
@@ -206,15 +208,32 @@ async function finalizeHeuristicPaywallSession(params: {
     shouldEmitHeuristicPurchaseStarted(result)
   ) {
     notifyPurchaseStarted({
-      platform: 'ios',
-      store: 'app_store',
+      platform,
+      store,
       ...(typeof heuristicSnapshot.inactiveAt === 'number' &&
       Number.isFinite(heuristicSnapshot.inactiveAt) &&
       heuristicSnapshot.inactiveAt > 0
         ? { timestamp: heuristicSnapshot.inactiveAt }
         : {}),
     } as any);
+    emittedStartedInFinalize = true;
   }
+
+  if (
+    result === PAYWALL_RESULT_CANCELLED &&
+    heuristicSnapshot.paywallIsOpen &&
+    !heuristicSnapshot.sawPurchaseTerminalDuringPaywall &&
+    (heuristicSnapshot.sawPurchaseStartedDuringPaywall || emittedStartedInFinalize)
+  ) {
+    notifyPurchaseCancelled({
+      platform,
+      store,
+    } as any);
+  }
+
+  // Close the synthetic paywall modal after any heuristic purchase emission so the
+  // purchase flow keeps the paywall surface attribution instead of the post-dismiss UI.
+  closeRevenueCatPaywallSource(trigger);
 }
 
 const PATCHABLE_METHODS = [
@@ -304,7 +323,7 @@ function pickFiniteNumber(value: unknown): number | undefined {
 }
 
 /**
- * `PurchasesStoreProduct`, objeto `Price` de fases de suscripción (amountMicros), o campos legacy Android.
+ * `PurchasesStoreProduct`, `Price` object from subscription phases (amountMicros), or legacy Android fields.
  */
 function extractPriceCurrencyFromProductLike(raw: unknown): {
   price?: number;
@@ -503,7 +522,7 @@ function chainPaywallCallback(
 }
 
 /**
- * Compone callbacks de `RevenueCatUI.Paywall` con analítica SignalFox.
+ * Composes `RevenueCatUI.Paywall` callbacks with SignalFox analytics.
  */
 function buildPaywallPurchaseAnalyticsProps(
   props: Record<string, unknown>,
@@ -823,8 +842,8 @@ function isPurchasesModule(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Parchea métodos de `Purchases` (y opcionalmente `RevenueCatUI`) usando referencias inyectadas.
- * Requiere que el core esté registrado (`registerPurchaseAnalyticsCore` hace `revenueCatIntegration`).
+ * Patches `Purchases` methods (and optionally `RevenueCatUI`) using injected references.
+ * Requires the core to be registered (`registerPurchaseAnalyticsCore` is done by `revenueCatIntegration`).
  */
 export function startRevenueCatPurchaseAnalytics(
   options: StartRevenueCatPurchaseAnalyticsOptions
@@ -851,14 +870,14 @@ export function startRevenueCatPurchaseAnalytics(
             typeof p.purchaseProduct === 'function');
         if (seemedPurchasesSdk) {
           console.warn(
-            '[SignalFox][RevenueCat] No se parcheó ningún método en el objeto `Purchases`. Revisa la versión del SDK o que uses el default export. Buscados:',
+            '[SignalFox][RevenueCat] No methods were patched on the `Purchases` object. Check the SDK version or whether you are using the default export. Searched:',
             [...PATCHABLE_METHODS, ...RESTORE_PATCHABLE_METHODS].join(', ')
           );
         }
       }
     } else {
       console.warn(
-        '[SignalFox] revenueCatIntegration: `purchases` no es un módulo válido; se omiten hooks de compra'
+        '[SignalFox] revenueCatIntegration: `purchases` is not a valid module; purchase hooks will be skipped'
       );
     }
 

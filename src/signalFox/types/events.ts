@@ -1,5 +1,5 @@
 /**
- * Tipos de eventos internos (SDK) → se mapean a DTO canónico en eventMapper.
+ * Internal event types (SDK) -> mapped to the canonical DTO in eventMapper.
  */
 
 export type AnalyticsEventType =
@@ -86,7 +86,7 @@ export type FlowStepParams = {
   id: string;
   displayName?: string;
   step_index?: number;
-  /** Si se omite, se usa la pantalla actual del core (puede ser null en el primer render). */
+  /** If omitted, the core's current screen is used (it may be null on the first render). */
   screen_name?: string;
 };
 

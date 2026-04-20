@@ -1,5 +1,5 @@
 /**
- * DTO alineado con el backend (ingesta canónica).
+ * DTO aligned with the backend (canonical ingestion).
  */
 export interface BackendEventDto {
   event_id?: string;

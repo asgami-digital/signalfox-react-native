@@ -1,5 +1,5 @@
 /**
- * Integración con AppState de React Native.
+ * React Native AppState integration.
  * Emite: app_open, app_background, app_foreground, session_start, session_end.
  * Ver docs/auto-analytics-experiment.md
  */

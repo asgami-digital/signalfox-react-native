@@ -5,12 +5,12 @@ import type {
 } from './events';
 
 /**
- * Interfaz mínima que el core expone a las integraciones.
+ * Minimal interface exposed by the core to integrations.
  */
 export interface IAnalyticsCore {
-  /** Vacía la cola y envía eventos pendientes al backend. */
+  /** Flushes the queue and sends pending events to the backend. */
   flush(): Promise<void>;
-  /** Eventos automáticos (lifecycle, navegación, parches RN, compras). */
+  /** Automatic events (lifecycle, navigation, RN patches, purchases). */
   trackEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void;
@@ -24,7 +24,7 @@ export interface IAnalyticsCore {
   trackSubview(params: SubviewParams): void;
 
   /**
-   * Integraciones de navegación (React Navigation / Expo Router): retienen eventos
+   * Navigation integrations (React Navigation / Expo Router): retain events
    * (excepto `screen_view`) hasta `clearNavigationIntentPending` o hasta
    * `NAVIGATION_INTENT_BUFFER_MAX_MS` sin resolver.
    */

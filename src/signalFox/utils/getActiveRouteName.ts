@@ -1,14 +1,14 @@
 /**
- * Resolución de ruta anidada: el estado de React Navigation puede tener
+ * Nested route resolution: the React Navigation state can contain
  * state.routes[].state (nested navigator). Recorremos recursivamente
  * state → routes[index] → state → … hasta la ruta hoja y devolvemos su name.
- * Así screen_view funciona con stacks/tabs anidados.
+ * This allows screen_view to work with nested stacks/tabs.
  */
 
 export interface NavStateLike {
   /**
-   * Identificador del navigator si la versión/runtime lo incluye en el estado.
-   * El `id` de `<Stack.Navigator id="...">` normalmente NO está en `getRootState()`;
+   * Navigator identifier if the version/runtime includes it in the state.
+   * The `id` of `<Stack.Navigator id="...">` is usually NOT present in `getRootState()`;
    * suele bastar `type`.
    */
   id?: string;

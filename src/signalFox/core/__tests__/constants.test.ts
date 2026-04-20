@@ -37,7 +37,7 @@ describe('computePurchaseTerminalAdjustedTimestamp', () => {
     );
   });
 
-  it('usa punto medio cuando el candidato queda en o antes del started', () => {
+  it('uses the midpoint when the candidate falls on or before started', () => {
     expect(computePurchaseTerminalAdjustedTimestamp(1000, 1008)).toBe(1004);
   });
 });

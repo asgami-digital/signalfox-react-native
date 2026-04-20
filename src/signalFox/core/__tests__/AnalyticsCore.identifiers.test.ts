@@ -47,7 +47,7 @@ describe('AnalyticsCore identifiers', () => {
     expect(dto?.target_name).toBe('App opened');
   });
 
-  it('mantiene displayName explicito y deja signalFoxId en null para modales sin id explicito', async () => {
+  it('keeps explicit displayName and leaves signalFoxId as null for modals without an explicit id', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -76,7 +76,7 @@ describe('AnalyticsCore identifiers', () => {
     expect(dto?.target_name).toBe('RevenueCat Paywall');
   });
 
-  it('deja signalFoxId y displayName en null para component_press sin identificador explicito', async () => {
+  it('leaves signalFoxId and displayName as null for component_press without an explicit identifier', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -103,7 +103,7 @@ describe('AnalyticsCore identifiers', () => {
     expect(dto?.target_name).toBeNull();
   });
 
-  it('usa el id de trackStep para flow_step_view', async () => {
+  it('uses the trackStep id for flow_step_view', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,

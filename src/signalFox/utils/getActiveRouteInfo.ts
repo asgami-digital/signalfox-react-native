@@ -1,6 +1,6 @@
 /**
- * Información de la ruta activa.
- * Soporta navegación anidada: se devuelve la ruta hoja (más profunda).
+ * Information about the active route.
+ * Supports nested navigation: returns the leaf route (the deepest one).
  */
 
 import type { NavStateLike } from './getActiveRouteName';
@@ -17,8 +17,8 @@ const MODAL_PRESENTATIONS = new Set<string>([
 ]);
 
 /**
- * Indica si una opción de presentación corresponde a un modal.
- * Basado en las opciones estándar de React Navigation (Stack).
+ * Indicates whether a presentation option corresponds to a modal.
+ * Based on standard React Navigation (Stack) options.
  */
 export function isRoutePresentedAsModal(
   presentation: string | undefined
@@ -27,7 +27,7 @@ export function isRoutePresentedAsModal(
   return MODAL_PRESENTATIONS.has(presentation);
 }
 
-/** Obtiene la ruta activa más profunda. */
+/** Gets the deepest active route. */
 export function getActiveRouteInfo(
   state: NavStateLike | undefined
 ): ActiveRouteInfo | undefined {

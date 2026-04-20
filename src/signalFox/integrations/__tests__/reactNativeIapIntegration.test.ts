@@ -4,6 +4,10 @@ import {
 } from '../reactNativeIapIntegration';
 
 describe('reactNativeIapIntegration', () => {
+  beforeEach(() => {
+    (globalThis as { __DEV__?: boolean }).__DEV__ = true;
+  });
+
   it('emite started, cancelled, failed, completed y restore_completed al parchear useIAP', async () => {
     let receivedOptions: Record<string, unknown> | undefined;
 
@@ -122,6 +126,38 @@ describe('reactNativeIapIntegration', () => {
     );
 
     cleanup();
+  });
+
+  it('shows a development error when Nitro is not available', () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const reactNativeIapModule = {
+      useIAP: jest.fn(() => ({})),
+    };
+    const core = {
+      flush: jest.fn(),
+      trackEvent: jest.fn(),
+      track: jest.fn(),
+      trackStep: jest.fn(),
+      trackSubview: jest.fn(),
+      markNavigationIntentPending: jest.fn(),
+      clearNavigationIntentPending: jest.fn(),
+      setNavigationIntentTimeoutListener: jest.fn(),
+    };
+
+    const integration = reactNativeIapIntegration({
+      reactNativeIap: reactNativeIapModule,
+    });
+
+    const cleanup = integration.setup(core as any);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[SignalFox][react-native-iap] Nitro was not detected. Full purchase event coverage is only guaranteed on Nitro-based react-native-iap versions.'
+    );
+
+    cleanup();
+    consoleErrorSpy.mockRestore();
   });
 
   it('emite purchase_started via Nitro cuando los exports publicos son inmutables', async () => {

@@ -1,6 +1,6 @@
 /**
- * Núcleo del sistema de auto-analytics.
- * Gestiona sesiones, cola de eventos, envío en batch y trackEvent().
+ * Core of the auto-analytics system.
+ * Manages sessions, event queueing, batch sending, and trackEvent().
  */
 
 import { Platform } from 'react-native';
@@ -28,6 +28,7 @@ import {
   isPurchaseFamilyEventType,
   isPurchaseFlowTerminalEventType,
   NAVIGATION_INTENT_BUFFER_MAX_MS,
+  PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS,
   shouldDelayScreenResolution,
 } from './constants';
 import { getActiveModalId } from './modalStack';
@@ -89,6 +90,13 @@ function trimOptionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
     : null;
+}
+
+interface PurchaseSurfaceContextSnapshot {
+  screenName: string | null;
+  parentModal: string | null;
+  productId: string | null;
+  startedAt: number;
 }
 
 function nullIfEmptySignalFoxId(value: string | null): string | null {
@@ -216,15 +224,15 @@ export class AnalyticsCore implements IAnalyticsCore {
   private currentScreenName: string | null = null;
   private readonly queue: QueuedEvent[] = [];
   /**
-   * Encadena pasadas de envío para que nunca haya dos `flush` concurrentes
+   * Chains send passes so there are never two concurrent `flush` operations
    * (p. ej. `scheduleFlush` + `await flush()`), incluso durante lecturas nativas async.
    */
   private flushPassChain: Promise<void> = Promise.resolve();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
-  /** Tras un 4xx irreversible (p. ej. API key inválida): no más red ni cola. */
+  /** After an irreversible 4xx (for example, invalid API key): no more network or queueing. */
   private sendPermanentlyDisabled = false;
 
-  /** `__unsafe_action__` sin `state` aún: eventos (≠ screen_view) esperan resolución de pantalla. */
+  /** `__unsafe_action__` without `state` yet: events (except screen_view) wait for screen resolution. */
   private navigationIntentPendingSinceMs: number | null = null;
   private navigationIntentTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly navigationIntentBuffer: Array<
@@ -232,19 +240,20 @@ export class AnalyticsCore implements IAnalyticsCore {
   > = [];
   private navigationIntentTimeoutListener: (() => void) | null = null;
 
-  /** Timestamp del último `purchase_started` procesado (flujo pendiente de cierre). */
+  /** Timestamp of the last processed `purchase_started` (flow pending closure). */
   private pendingPurchaseStartedTimestamp: number | null = null;
   /** Timestamp del primer evento no terminal entre started y completed/cancel/fail. */
   private firstTimestampAfterPurchaseStarted: number | null = null;
   /**
    * Pantalla y modal activos en el momento de `purchase_started`, reutilizados en
-   * `purchase_completed` / `purchase_failed` / `purchase_cancelled` (misma atribución
-   * que el inicio del flujo aunque el store sheet cierre o cambie la pantalla).
+   * `purchase_completed` / `purchase_failed` / `purchase_cancelled` (same attribution
+   * as the flow start even if the store sheet closes or changes the screen).
    */
-  private pendingPurchaseSurfaceContext: {
-    screenName: string | null;
-    parentModal: string | null;
-  } | null = null;
+  private pendingPurchaseSurfaceContext: PurchaseSurfaceContextSnapshot | null =
+    null;
+  /** Recent purchase starts kept for a short SKU-based fallback window. */
+  private readonly recentPurchaseSurfaceContexts: PurchaseSurfaceContextSnapshot[] =
+    [];
 
   constructor(config: AnalyticsCoreConfig) {
     this.apiKey = config.apiKey;
@@ -257,7 +266,7 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   /**
-   * Versión de app, modelo y OS desde nativo (promesas cacheadas a nivel módulo).
+   * App version, model, and OS from native (promises cached at module level).
    * Convoca antes de transportar o al iniciar el core para no etiquetar eventos con `0.0.0`.
    */
   private async refreshTransportMetadataFromNative(): Promise<void> {
@@ -296,8 +305,8 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   /**
-   * Inicialización asíncrona opcional para hidratar anonymousId desde nativo.
-   * Si nativo falla, mantiene fallback en memoria sin romper el flujo.
+   * Optional async initialization to hydrate anonymousId from native.
+   * If native fails, it keeps the in-memory fallback without breaking the flow.
    */
   async init(): Promise<void> {
     await this.refreshTransportMetadataFromNative();
@@ -335,9 +344,9 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   markNavigationIntentPending(): void {
-    // Hard cap de retención: si ya hay intent pendiente no extendemos el timeout.
-    // Evita que ráfagas de acciones (__unsafe_action__) mantengan eventos retenidos
-    // indefinidamente (p. ej. flow_step_view en primera pantalla).
+    // Hard retention cap: if there is already a pending intent, do not extend the timeout.
+    // Prevents bursts of actions (__unsafe_action__) from keeping events retained
+    // indefinitely (for example, flow_step_view on the first screen).
     if (this.navigationIntentPendingSinceMs !== null) {
       return;
     }
@@ -377,7 +386,7 @@ export class AnalyticsCore implements IAnalyticsCore {
       const ev = this.navigationIntentBuffer.shift()!;
       this.processEvent(ev);
     }
-    // Si el buffer volcó eventos y no alcanzan batch, aún así los intentamos enviar.
+    // If the buffer released events and they do not reach the batch size, still try to send them.
     if (this.queue.length > 0 && !this.sendPermanentlyDisabled) {
       this.scheduleFlush();
     }
@@ -394,6 +403,66 @@ export class AnalyticsCore implements IAnalyticsCore {
       return null;
     }
     return trimOptionalString(payload.parent_modal);
+  }
+
+  private purchaseProductIdFromEvent(
+    event: { type: AnalyticsEventType } & Record<string, unknown>
+  ): string | null {
+    const direct = this.pickOptionalString((event as { productId?: unknown }).productId);
+    if (direct) return direct;
+    const payload =
+      event.payload && typeof event.payload === 'object'
+        ? (event.payload as Record<string, unknown>)
+        : null;
+    return this.pickOptionalString(payload?.productId);
+  }
+
+  private pruneRecentPurchaseSurfaceContexts(referenceTs: number): void {
+    while (this.recentPurchaseSurfaceContexts.length > 0) {
+      const first = this.recentPurchaseSurfaceContexts[0];
+      if (
+        referenceTs - first.startedAt <= PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS
+      ) {
+        break;
+      }
+      this.recentPurchaseSurfaceContexts.shift();
+    }
+  }
+
+  private rememberPurchaseSurfaceContext(
+    context: PurchaseSurfaceContextSnapshot
+  ): void {
+    this.recentPurchaseSurfaceContexts.push(context);
+    this.pruneRecentPurchaseSurfaceContexts(context.startedAt);
+  }
+
+  private resolvePurchaseSurfaceContextForTerminal(
+    eventTimestamp: number,
+    productId: string | null
+  ): PurchaseSurfaceContextSnapshot | null {
+    this.pruneRecentPurchaseSurfaceContexts(eventTimestamp);
+
+    if (
+      this.pendingPurchaseSurfaceContext &&
+      (productId == null ||
+        this.pendingPurchaseSurfaceContext.productId == null ||
+        this.pendingPurchaseSurfaceContext.productId === productId)
+    ) {
+      return this.pendingPurchaseSurfaceContext;
+    }
+
+    if (productId == null) {
+      return null;
+    }
+
+    for (let i = this.recentPurchaseSurfaceContexts.length - 1; i >= 0; i--) {
+      const candidate = this.recentPurchaseSurfaceContexts[i];
+      if (candidate.productId === productId) {
+        return candidate;
+      }
+    }
+
+    return null;
   }
 
   private resolveScreenName(
@@ -462,7 +531,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     }
 
     // Por defecto: momento en que el evento se materializa en la cola (tras el delay
-    // de resolución de pantalla si aplica). Las integraciones pueden fijar `timestamp`
+    // for screen resolution if applicable). Integrations can set `timestamp`
     // (ms desde epoch) en el objeto pasado a trackEvent para anclar el instante real.
     const explicitTs = (event as { timestamp?: unknown }).timestamp;
     let eventTimestamp =
@@ -497,9 +566,9 @@ export class AnalyticsCore implements IAnalyticsCore {
       }
     }
 
-    // Siempre adjuntamos el modal "padre" (último abierto) para enlazar jerarquías de UI.
+    // We always attach the "parent" modal (last opened) to link UI hierarchies.
     // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
-    // use el modal anterior (stack después del pop).
+    // use the previous modal (stack after the pop).
     const parentModal = getActiveModalId();
     const maybePayload = (event as { payload?: unknown }).payload;
     const nextPayload: Record<string, unknown> =
@@ -509,37 +578,55 @@ export class AnalyticsCore implements IAnalyticsCore {
         ? (maybePayload as Record<string, unknown>)
         : {};
 
-    // Si una integración ya calculó `parent_modal`, no lo sobrescribimos.
+    // If an integration already calculated `parent_modal`, do not overwrite it.
     // Esto es importante en acciones "close" donde el stack puede cambiar
-    // inmediatamente después del evento.
+    // immediately after the event.
     if (typeof nextPayload.parent_modal === 'undefined') {
       nextPayload.parent_modal = parentModal;
     }
 
-    const applyPurchaseTerminalSurface =
-      isPurchaseFlowTerminalEventType(eventType) &&
-      this.pendingPurchaseSurfaceContext != null;
+    const terminalProductId = isPurchaseFlowTerminalEventType(eventType)
+      ? this.purchaseProductIdFromEvent(event)
+      : null;
+    const terminalSurfaceContext = isPurchaseFlowTerminalEventType(eventType)
+      ? this.resolvePurchaseSurfaceContextForTerminal(
+          eventTimestamp,
+          terminalProductId
+        )
+      : null;
+    const applyPurchaseTerminalSurface = terminalSurfaceContext != null;
 
     if (applyPurchaseTerminalSurface) {
-      const snap = this.pendingPurchaseSurfaceContext!;
+      const snap = terminalSurfaceContext!;
       nextPayload.parent_modal = snap.parentModal;
     }
 
     (event as { payload?: unknown }).payload = nextPayload;
 
     const resolvedScreenName = applyPurchaseTerminalSurface
-      ? this.pendingPurchaseSurfaceContext!.screenName
+      ? terminalSurfaceContext!.screenName
       : this.resolveScreenName(event);
 
     if (eventType === 'purchase_started') {
-      this.pendingPurchaseSurfaceContext = {
+      const surfaceContext: PurchaseSurfaceContextSnapshot = {
         screenName: resolvedScreenName,
         parentModal: this.parentModalSnapshotFromPayload(nextPayload),
+        productId: this.purchaseProductIdFromEvent(event),
+        startedAt: eventTimestamp,
       };
+      this.pendingPurchaseSurfaceContext = surfaceContext;
+      this.rememberPurchaseSurfaceContext(surfaceContext);
     }
 
     if (isPurchaseFlowTerminalEventType(eventType)) {
-      this.pendingPurchaseSurfaceContext = null;
+      if (
+        this.pendingPurchaseSurfaceContext == null ||
+        terminalProductId == null ||
+        this.pendingPurchaseSurfaceContext.productId == null ||
+        this.pendingPurchaseSurfaceContext.productId === terminalProductId
+      ) {
+        this.pendingPurchaseSurfaceContext = null;
+      }
     }
     const family = getCanonicalTriple(event.type).event_family;
     const explicitSignalFoxId =
@@ -629,7 +716,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     }
   }
 
-  /** Eventos automáticos (integraciones). */
+  /** Automatic events (integrations). */
   trackEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
@@ -642,6 +729,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     }
 
     const bypassNavigationIntentBuffer =
+      isPurchaseFamilyEventType(event.type) ||
       event.type === 'screen_view' ||
       event.type === 'modal_open' ||
       event.type === 'modal_close' ||
@@ -758,8 +846,8 @@ export class AnalyticsCore implements IAnalyticsCore {
   }
 
   /**
-   * Evento semántico: sub-vista interna dentro de una pantalla.
-   * No reemplaza trackStep (flujos lineales), sino subáreas activas de la screen.
+   * Semantic event: internal subview within a screen.
+   * It does not replace trackStep (linear flows), but rather active screen subareas.
    */
   trackSubview(params: SubviewParams): void {
     const subviewName = typeof params.id === 'string' ? params.id.trim() : '';
@@ -785,7 +873,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     });
   }
 
-  /** Envío en segundo plano; errores ya se registran en `sendBatch` / `sendEvents`. */
+  /** Background send; errors are already recorded in `sendBatch` / `sendEvents`. */
   private scheduleFlush(): void {
     this.flush().catch(() => {
       /* fire-and-forget */
@@ -901,6 +989,10 @@ export class AnalyticsCore implements IAnalyticsCore {
     this.pendingPurchaseStartedTimestamp = null;
     this.firstTimestampAfterPurchaseStarted = null;
     this.pendingPurchaseSurfaceContext = null;
+    this.recentPurchaseSurfaceContexts.splice(
+      0,
+      this.recentPurchaseSurfaceContexts.length
+    );
     this.scheduleFlush();
   }
 }

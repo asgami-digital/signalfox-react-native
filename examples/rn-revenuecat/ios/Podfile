@@ -1,3 +1,5 @@
+require 'json'
+
 ENV['RCT_NEW_ARCH_ENABLED'] = '1'
 
 # Resolve react_native_pods.rb with node to allow for hoisting
@@ -32,5 +34,21 @@ target 'SignalfoxReactNativeExample' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    hermesc_path = File.expand_path('../node_modules/hermes-compiler/hermesc/osx-bin/hermesc', __dir__)
+
+    Dir.glob(File.join(__dir__, 'Pods/Target Support Files/Pods-SignalfoxReactNativeExample/*.xcconfig')).each do |xcconfig_path|
+      xcconfig = File.read(xcconfig_path)
+      updated = xcconfig.gsub(/^HERMES_CLI_PATH = .*$/, "HERMES_CLI_PATH = #{hermesc_path}")
+      File.write(xcconfig_path, updated) if updated != xcconfig
+    end
+
+    hermes_podspec_path = File.join(__dir__, 'Pods/Local Podspecs/hermes-engine.podspec.json')
+    if File.exist?(hermes_podspec_path)
+      hermes_podspec = JSON.parse(File.read(hermes_podspec_path))
+      hermes_podspec['user_target_xcconfig'] ||= {}
+      hermes_podspec['user_target_xcconfig']['HERMES_CLI_PATH'] = hermesc_path
+      File.write(hermes_podspec_path, JSON.pretty_generate(hermes_podspec))
+    end
   end
 end

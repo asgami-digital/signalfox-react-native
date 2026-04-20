@@ -29,7 +29,7 @@ export function PurchaseManualScreen() {
       logDemoEvent('manual_purchase_refresh_error', {
         message: error instanceof Error ? error.message : 'unknown',
       });
-      Alert.alert('No se pudieron cargar los productos', String(error));
+      Alert.alert('Could not load products', String(error));
     }
   };
 

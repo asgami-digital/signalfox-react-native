@@ -8,7 +8,7 @@ It helps you track app lifecycle, native modals, native touchables, navigation, 
 
 - Website: https://signalfox.io
 - Documentation: https://docs.signalfox.io
-- GitHub: https://github.com/TU-USUARIO/TU-REPO
+- GitHub: https://github.com/asgami-digital/signalfox-react-native
 
 ## What This Library Does
 

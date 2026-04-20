@@ -1,6 +1,6 @@
 import type { AnalyticsEventType } from '../types/events';
 
-/** Prefijo de API keys de desarrollo: envío inmediato sin depender del batch/timer. */
+/** Development API key prefix: send immediately without relying on the batch/timer. */
 export const DEV_API_KEY_PREFIX = 'ak_dev__';
 
 export function isDevApiKey(apiKey: string): boolean {
@@ -11,22 +11,22 @@ export const DEFAULT_BATCH_SIZE = 10;
 export const DEFAULT_FLUSH_INTERVAL_MS = 30_000;
 
 /**
- * Delay corto para dejar que `screen_view` actualice la pantalla activa
- * antes de adjudicar `screen_name` al resto (incluida la familia de compras).
+ * Short delay to let `screen_view` update the active screen
+ * before assigning `screen_name` to the rest (including the purchase family).
  */
 export const EVENT_SCREEN_RESOLUTION_DELAY_MS = 0;
 
 /**
- * Tras `__unsafe_action__` sin `state` aún: máximo de espera antes de adjudicar
- * `screen_name` a eventos retenidos (navegación cancelada o sin cambio de rama).
+ * After `__unsafe_action__` while `state` is still unavailable: maximum wait time before assigning
+ * `screen_name` to retained events (canceled navigation or no branch change).
  */
 export const NAVIGATION_INTENT_BUFFER_MAX_MS = 2000;
 
-/** Único tipo que procesa sin esperar: fija `currentScreenName` antes que los demás. */
+/** Only type processed without waiting: sets `currentScreenName` before the rest. */
 const NO_SCREEN_RESOLUTION_DELAY_TYPES: ReadonlySet<AnalyticsEventType> =
   new Set<AnalyticsEventType>(['screen_view']);
 
-/** Eventos emitidos por el bridge nativo de compras (logs / heurísticas). */
+/** Events emitted by the native purchase bridge (logs / heuristics). */
 export const PURCHASE_FAMILY_EVENT_TYPES: ReadonlySet<AnalyticsEventType> =
   new Set<AnalyticsEventType>([
     'purchase_started',
@@ -51,12 +51,18 @@ export function shouldDelayScreenResolution(
 }
 
 /**
- * Desfase respecto al primer evento no terminal entre `purchase_started` y el cierre del flujo,
- * para que `purchase_completed` / `cancelled` / `failed` queden anclados justo antes en la línea de tiempo.
+ * Offset relative to the first non-terminal event between `purchase_started` and the flow close,
+ * so `purchase_completed` / `cancelled` / `failed` remain anchored just before it in the timeline.
  */
 export const PURCHASE_TERMINAL_TIMESTAMP_OFFSET_MS = 10;
 
-/** Cierre lógico del flujo iniciado con `purchase_started` (RevenueCat / bridge JS). */
+/**
+ * Keep recent `purchase_started` attribution available for late or slightly
+ * desynchronized terminal events from the same SKU.
+ */
+export const PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS = 10_000;
+
+/** Logical close of the flow started with `purchase_started` (RevenueCat / JS bridge). */
 export function isPurchaseFlowTerminalEventType(
   eventType: AnalyticsEventType
 ): boolean {
@@ -69,7 +75,7 @@ export function isPurchaseFlowTerminalEventType(
 
 /**
  * Garantiza startedTs < resultado < firstInterveningTs cuando hay margen en ms enteros.
- * Si firstInterveningTs - offset cae en o antes de startedTs, usa el punto medio (floor).
+ * If firstInterveningTs - offset falls on or before startedTs, use the midpoint (floor).
  */
 export function computePurchaseTerminalAdjustedTimestamp(
   startedTs: number,

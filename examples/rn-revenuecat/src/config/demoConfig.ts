@@ -1,4 +1,4 @@
-import { SIGNALFOX_EXAMPLE_API_KEY, RN_REVENUECAT_API_KEY } from '@env';
+import { SIGNALFOX_EXAMPLE_API_KEY, RN_REVENUECAT_API_KEY, REVENUECAT_ENTITLEMENT_ID, REVENUECAT_PRODUCT_ID } from '@env';
 
 function normalize(value: string | undefined): string {
   return (value ?? '').trim();
@@ -7,8 +7,8 @@ function normalize(value: string | undefined): string {
 export const demoConfig = {
   signalFoxApiKey: normalize(SIGNALFOX_EXAMPLE_API_KEY),
   revenueCatApiKey: normalize(RN_REVENUECAT_API_KEY),
-  revenueCatProductId: 'REPLACE_WITH_REVENUECAT_PRODUCT_ID',
-  revenueCatEntitlementId: 'REPLACE_WITH_REVENUECAT_ENTITLEMENT_ID',
+  revenueCatProductId: normalize(REVENUECAT_PRODUCT_ID),
+  revenueCatEntitlementId: normalize(REVENUECAT_ENTITLEMENT_ID),
 };
 
 export function hasSignalFoxApiKey(): boolean {

@@ -1,4 +1,4 @@
-# Hooks desactivados temporalmente (descomenta para restaurar).
+# Hooks temporarily disabled (uncomment to restore).
 #
 # pre-commit:
 #   parallel: true

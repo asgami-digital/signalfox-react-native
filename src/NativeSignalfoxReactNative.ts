@@ -8,31 +8,31 @@ export interface Spec extends TurboModule {
   getOsVersion(): Promise<string>;
 
   /**
-   * Inicia listeners nativos de compras y activa la emisión de eventos hacia JS.
-   * Los eventos se publican en el channel `signalfox_purchase_event`.
+   * Starts native purchase listeners and enables event emission to JS.
+   * Events are published on the `signalfox_purchase_event` channel.
    */
   startNativePurchaseAnalytics(): Promise<void>;
 
   /**
-   * Detiene listeners nativos de compras.
+   * Stops native purchase listeners.
    */
   stopNativePurchaseAnalytics(): Promise<void>;
 
   /**
-   * Fuerza una reconciliación nativa (ej: re-query de compras activas)
-   * que puede emitir `restore_completed`.
+   * Forces a native reconciliation (for example, re-querying active purchases)
+   * that may emit `restore_completed`.
    */
   reconcileNativePurchases(): Promise<void>;
 
   /**
-   * Abre una ventana heurística de paywall para inferir `purchase_started`
-   * a partir de `inactive` mientras RevenueCatUI está visible.
+   * Opens a heuristic paywall window to infer `purchase_started`
+   * from `inactive` while RevenueCatUI is visible.
    */
   beginHeuristicPaywallSession(): Promise<void>;
 
   /**
-   * Cierra la ventana heurística del paywall y devuelve si se observó
-   * `inactive` durante su vida y en qué instante ocurrió.
+   * Closes the heuristic paywall window and returns whether `inactive`
+   * was observed during its lifetime and when it happened.
    */
   endHeuristicPaywallSession(): Promise<{
     sawInactiveDuringPaywall?: boolean;

@@ -58,7 +58,7 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 - (void)getDeviceModel:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject
 {
-  // hw.machine → identificador Apple (p. ej. iPhone16,1), no el genérico "iPhone" de UIDevice.model.
+  // hw.machine -> Apple identifier (for example, iPhone16,1), not the generic "iPhone" from UIDevice.model.
   NSString *machine = SignalfoxHardwareMachineString();
   resolve(machine ?: ([UIDevice currentDevice].model ?: @""));
 }

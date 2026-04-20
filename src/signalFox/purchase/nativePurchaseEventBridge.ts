@@ -11,7 +11,7 @@ import {
 export const NATIVE_PURCHASE_EVENT_CHANNEL = 'signalfox_purchase_event';
 
 let subscription: { remove: () => void } | null = null;
-/** Cuántas veces se llamó `startListeningToNativePurchaseEvents` sin el `stop` correspondiente. */
+/** How many times `startListeningToNativePurchaseEvents` was called without the matching `stop`. */
 let nativeChannelSessionCount = 0;
 let nativePurchaseListenerEnabled = false;
 
@@ -24,9 +24,9 @@ function debugWarn(...args: unknown[]): void {
 }
 
 /**
- * Registra el core y, opcionalmente, el canal nativo (`NativeEventEmitter` + analytics nativo).
- * Para solo enlazar RevenueCat u otros hooks JS, usa `registerPurchaseAnalyticsCore` en
- * `purchaseAnalyticsBridge` (no importes este módulo).
+ * Registers the core and, optionally, the native channel (`NativeEventEmitter` + native analytics).
+ * To only hook RevenueCat or other JS hooks, use `registerPurchaseAnalyticsCore` in
+ * `purchaseAnalyticsBridge` (do not import this module).
  */
 export function startListeningToNativePurchaseEvents(
   core: IAnalyticsCore,

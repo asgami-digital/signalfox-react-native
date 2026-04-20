@@ -8,21 +8,21 @@ export const EXPO_ROUTER_INTEGRATION_NAME = 'expoRouter';
 
 export interface ExpoRouterIntegrationOptions {
   /**
-   * Ref del contenedor raíz de Expo Router.
+   * Expo Router root container ref.
    *
-   * Uso típico:
+   * Typical usage:
    * `const navigationRef = useNavigationContainerRef()` desde `expo-router`.
    */
   navigationRef: NavigationRefLike;
 }
 
 /**
- * Integración de navegación para Expo Router.
+ * Navigation integration for Expo Router.
  *
- * Expo Router monta React Navigation por debajo y expone el ref raíz con
- * `useNavigationContainerRef()`, así que reutilizamos la misma lógica de
- * `reactNavigationIntegration` para conservar `intent_ts`, `screen_view`,
- * `stack_path`, `active_tab` y resolución de pantalla.
+ * Expo Router mounts React Navigation under the hood and exposes the root ref with
+ * `useNavigationContainerRef()`, so we reuse the same `reactNavigationIntegration`
+ * logic to preserve `intent_ts`, `screen_view`,
+ * `stack_path`, `active_tab`, and screen resolution.
  */
 export function expoRouterIntegration(
   options: ExpoRouterIntegrationOptions

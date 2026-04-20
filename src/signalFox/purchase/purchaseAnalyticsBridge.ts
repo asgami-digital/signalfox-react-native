@@ -13,7 +13,7 @@ const lastEventSeenAtMs = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 3000;
 const COMPLETION_DEDUPE_WINDOW_MS = 10000;
 
-/** Último sku notificado con `notifyPurchaseStarted` (p. ej. Android cancel sin productId). */
+/** Last SKU notified through `notifyPurchaseStarted` (for example, Android cancel without productId). */
 let pendingPurchaseProductId: string | null = null;
 
 function defaultStoreForPlatform(): PurchaseStore {
@@ -34,6 +34,21 @@ function clearPendingPurchaseProductId(reason: string): void {
     debugLog('pending purchase productId cleared', { reason });
   }
   pendingPurchaseProductId = null;
+}
+
+function attachPendingProductIdToJsPayload<T extends Record<string, unknown> | undefined>(
+  payload: T
+): T {
+  if (
+    pendingPurchaseProductId == null ||
+    (typeof payload?.productId === 'string' && payload.productId.trim().length > 0)
+  ) {
+    return payload;
+  }
+  return {
+    ...(payload ?? {}),
+    productId: pendingPurchaseProductId,
+  } as T;
 }
 
 function debugLog(...args: unknown[]): void {
@@ -115,8 +130,8 @@ function toCoreTrackEvent(
 }
 
 /**
- * Registra el `AnalyticsCore` para que `notifyPurchase*` y hooks (p. ej. RevenueCat) envíen eventos.
- * Independiente del canal nativo opcional (`nativePurchaseEventBridge`).
+ * Registers the `AnalyticsCore` so `notifyPurchase*` and hooks (for example, RevenueCat) can send events.
+ * Independent from the optional native channel (`nativePurchaseEventBridge`).
  */
 export function registerPurchaseAnalyticsCore(core: IAnalyticsCore): void {
   if (bridgeRefCount === 0) {
@@ -134,7 +149,7 @@ export function unregisterPurchaseAnalyticsCore(): void {
   pendingPurchaseProductId = null;
 }
 
-/** Usado por el listener del canal nativo (módulo aparte). */
+/** Used by the native channel listener (separate module). */
 export function ingestNativePurchaseChannelPayload(
   payload: NativePurchaseEventPayload
 ): void {
@@ -189,7 +204,7 @@ export function notifyPurchaseStarted(
   if (!activeCore) {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       debugWarn(
-        'notifyPurchaseStarted: sin activeCore — el evento no se enviará al core. Monta revenueCatIntegration() o llama registerPurchaseAnalyticsCore(core) antes de comprar.'
+        'notifyPurchaseStarted: no activeCore - the event will not be sent to the core. Mount revenueCatIntegration() or call registerPurchaseAnalyticsCore(core) before purchasing.'
       );
     }
     return;
@@ -219,11 +234,17 @@ export function notifyPurchaseCancelled(
 ): void {
   if (!activeCore) return;
 
+  const payloadWithPendingProductId = attachPendingProductIdToJsPayload(
+    payload as Record<string, unknown> | undefined
+  ) as Omit<NativePurchaseEventPayload, 'eventName'> | undefined;
+
   const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
-    ...(payload as any),
+    ...(payloadWithPendingProductId as any),
     eventName: 'purchase_cancelled',
-    platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
-    store: payload?.store ?? defaultStoreForPlatform(),
+    platform:
+      payloadWithPendingProductId?.platform ??
+      (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: payloadWithPendingProductId?.store ?? defaultStoreForPlatform(),
   });
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
@@ -236,11 +257,17 @@ export function notifyPurchaseFailed(
 ): void {
   if (!activeCore) return;
 
+  const payloadWithPendingProductId = attachPendingProductIdToJsPayload(
+    payload as Record<string, unknown> | undefined
+  ) as Omit<NativePurchaseEventPayload, 'eventName'> | undefined;
+
   const normalized = normalizeNativePurchaseEventToAnalyticsEvent({
-    ...(payload as any),
+    ...(payloadWithPendingProductId as any),
     eventName: 'purchase_failed',
-    platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
-    store: payload?.store ?? defaultStoreForPlatform(),
+    platform:
+      payloadWithPendingProductId?.platform ??
+      (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: payloadWithPendingProductId?.store ?? defaultStoreForPlatform(),
   });
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;

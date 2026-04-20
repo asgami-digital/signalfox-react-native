@@ -24,13 +24,13 @@ From the repo root:
 yarn example:rn-revenuecat
 ```
 
-En otra terminal:
+In another terminal:
 
 ```sh
 yarn example:rn-revenuecat:ios
 ```
 
-o:
+or:
 
 ```sh
 yarn example:rn-revenuecat:android

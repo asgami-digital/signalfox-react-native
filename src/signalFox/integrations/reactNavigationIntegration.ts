@@ -1,7 +1,7 @@
 /**
- * Integración con @react-navigation/native.
+ * Integration with @react-navigation/native.
  *
- * La marca de intención de navegación (`intent_ts`) usa el evento interno `__unsafe_action__`
+ * The navigation intent marker (`intent_ts`) uses the internal `__unsafe_action__` event
  * del contenedor, sin monkey-patch de navigate/dispatch en el ref.
  */
 
@@ -23,7 +23,7 @@ import {
   modalStackPush,
 } from '../core/modalStack';
 
-// Interval para fallback mínimo si no se puede adjuntar un listener del navigator.
+// Minimal fallback polling interval if a navigator listener cannot be attached.
 const POLL_INTERVAL_MS = 350;
 
 const DISPATCH_INTENT_TYPES = new Set<string>([
@@ -51,8 +51,8 @@ function shouldMarkDispatchAction(action: unknown): boolean {
 }
 
 /**
- * Firma estable de la rama activa raíz → hoja (tipos de navigator, índices, nombres y keys de ruta).
- * Detecta cambios en stacks/tabs anidados que no alteran el índice ni los nombres solo en el nivel raíz.
+ * Stable signature of the active root-to-leaf branch (navigator types, indices, route names, and route keys).
+ * Detects changes in nested stacks/tabs that do not alter the index or names only at the root level.
  */
 function buildActiveRouteBranchKey(state: NavStateLike | undefined): string {
   type RouteBranch = NavStateLike['routes'][number] & { key?: string };
@@ -98,7 +98,7 @@ interface NavigatorContextPayload {
   parent_modal: string | null;
 }
 
-/** Payload típico del evento interno `__unsafe_action__` del NavigationContainer. */
+/** Typical payload for the internal NavigationContainer `__unsafe_action__` event. */
 type NavigationUnsafeActionEvent = {
   data?: { action?: unknown };
 };
@@ -114,8 +114,8 @@ export interface NavigationRefLike {
 
   /**
    * En `createNavigationContainerRef` / NavigationContainer: `state`, `ready`,
-   * `__unsafe_action__`, etc. La firma real es genérica; usamos `unknown` para que
-   * `NavigationContainerRefWithCurrent` sea asignable aquí.
+   * `__unsafe_action__`, etc. The real signature is generic; we use `unknown` so that
+   * `NavigationContainerRefWithCurrent` is assignable here.
    */
   addListener?: unknown;
 }
@@ -152,8 +152,8 @@ function emitScreenView(
 }
 
 /**
- * Camino de nombres de ruta en el Stack activo hasta la pantalla enfocada.
- * Usa state.routes del navigator tipo "stack" (no el nombre de la pantalla como "raíz").
+ * Route-name path in the active Stack down to the focused screen.
+ * Uses state.routes from the active "stack" navigator (not the screen name as the "root").
  */
 function getStackPathToFocused(state: NavStateLike | undefined): string[] {
   if (
@@ -220,7 +220,7 @@ function getStackEntriesToFocused(
 }
 
 /**
- * Pestaña activa: primer navigator tipo tab encontrado al bajar por el estado.
+ * Active tab: first tab-type navigator found while traversing the state.
  */
 function getActiveTabRouteName(state: NavStateLike | undefined): string | null {
   if (
@@ -243,9 +243,9 @@ function getActiveTabRouteName(state: NavStateLike | undefined): string | null {
 }
 
 /**
- * Identidad del navigator raíz para analytics.
- * `getRootState()` no incluye el `id` de `<Stack.Navigator id="...">` en las versiones típicas;
- * usamos `state.id` si existiera, luego `state.type`, y por último un fallback genérico.
+ * Root navigator identity for analytics.
+ * `getRootState()` does not include the `id` of `<Stack.Navigator id="...">` in typical versions;
+ * we use `state.id` if available, then `state.type`, and finally a generic fallback.
  */
 function getRootNavigatorIdentity(
   state: NavStateLike | undefined
@@ -409,8 +409,8 @@ export function reactNavigationIntegration(
 
         const activeBranchKey = buildActiveRouteBranchKey(state);
         if (activeBranchKey === lastActiveBranchKey) {
-          // Misma rama activa completa (p. ej. solo params): no hay transición de
-          // pantalla nueva; evita pending colgado.
+          // Same full active branch (for example, only params changed): there is no
+          // new screen transition; avoid leaving pending state hanging.
           pendingNavigationTimestamp = null;
           core.clearNavigationIntentPending?.();
           return;
@@ -503,14 +503,14 @@ export function reactNavigationIntegration(
         previousRouteSnapshot = currentRouteSnapshot;
         previousStackRouteKeys = currentStackRouteKeys;
         core.clearNavigationIntentPending?.();
-        // Primera pantalla resuelta: dejamos de hacer polling de arranque.
+        // First resolved screen: stop the startup polling.
         stopBootstrapPolling();
       };
 
       const unsubscribers: Array<() => void> = [];
 
       /**
-       * API interna del contenedor: se emite en cada acción procesada (navigate desde pantallas, ref, etc.).
+       * Internal container API: emitted on every processed action (navigate from screens, ref, etc.).
        * Sirve para intent_ts sin monkey-patch de navigate/dispatch en el ref.
        */
       const addListener = navigationRef.addListener;
@@ -539,7 +539,7 @@ export function reactNavigationIntegration(
       addStateListener(navigationRef);
       addStateListener(navigationRef.current);
 
-      // Algunas implementaciones emiten 'ready' (si existe, disparamos al primer estado válido).
+      // Some implementations emit 'ready' (if it exists, we trigger on the first valid state).
       if (typeof addListener === 'function') {
         const unsubReady = addListener.call(navigationRef, 'ready', () => {
           handleStateChange();
@@ -551,7 +551,7 @@ export function reactNavigationIntegration(
       // En release puede haber carreras donde el primer state/ready no se observe.
       bootstrapInterval = setInterval(handleStateChange, POLL_INTERVAL_MS);
 
-      // Intento inicial si el container ya está listo.
+      // Initial attempt if the container is already ready.
       try {
         if (navigationRef.current?.isReady?.()) {
           handleStateChange();

@@ -74,7 +74,7 @@ describe('AnalyticsCore purchase flow timestamps', () => {
     expect(isoToMs(completed!.event_timestamp)).toBe(1_700_000_000_090);
   });
 
-  it('si -10 ms cae antes del started, usa punto medio entre started e intermedio', async () => {
+  it('if -10 ms falls before started, it uses the midpoint between started and the intermediate event', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -114,7 +114,7 @@ describe('AnalyticsCore purchase flow timestamps', () => {
     );
   });
 
-  it('sin eventos intermedios, mantiene el timestamp del terminal', async () => {
+  it('without intermediate events, it keeps the terminal timestamp', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -213,5 +213,57 @@ describe('AnalyticsCore purchase flow timestamps', () => {
     expect(secondStarted?.parent_modal).toBeNull();
     expect(failed?.screen_name).toBe('HomeAfterDismiss');
     expect(failed?.parent_modal).toBeNull();
+  });
+
+  it('reuses the matching purchase_started surface for 10 seconds when another purchase_started overwrote the pending one', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    const t0 = 1_700_000_000_000;
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: t0,
+      payload: { screen_name: 'Pricing' },
+    } as any);
+    core.trackEvent({
+      type: 'purchase_started',
+      timestamp: t0 + 50,
+      payload: { productId: 'pro_monthly' },
+    } as any);
+
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: t0 + 100,
+      payload: { screen_name: 'Settings' },
+    } as any);
+    core.trackEvent({
+      type: 'purchase_started',
+      timestamp: t0 + 150,
+      payload: { productId: 'pro_yearly' },
+    } as any);
+
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: t0 + 200,
+      payload: { screen_name: 'Home' },
+    } as any);
+    core.trackEvent({
+      type: 'purchase_completed',
+      timestamp: t0 + 500,
+      payload: { productId: 'pro_monthly' },
+    } as any);
+
+    await core.flush();
+
+    const batch = mockedSendEvents.mock.calls[0]![0];
+    const events = batch.events as Array<{
+      event_name?: string;
+      screen_name?: string | null;
+    }>;
+    const completed = events.find((e) => e.event_name === 'purchase_completed');
+    expect(completed?.screen_name).toBe('Pricing');
   });
 });

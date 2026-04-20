@@ -129,7 +129,7 @@ describe('reactNavigationIntegration', () => {
     jest.restoreAllMocks();
   });
 
-  it('detecta apertura y cierre de navigation modals desde getCurrentOptions()', () => {
+  it('detects opening and closing of navigation modals from getCurrentOptions()', () => {
     const harness = createNavigationHarness();
     const core = createCoreMock();
     const cleanup = reactNavigationIntegration({
@@ -214,7 +214,7 @@ describe('reactNavigationIntegration', () => {
     cleanup();
   });
 
-  it('convive con un modal nativo debajo y conserva el parent_modal real', () => {
+  it('coexists with a native modal underneath and preserves the real parent_modal', () => {
     modalStackPush({
       id: 'native-paywall',
       source: 'react_native_modal',

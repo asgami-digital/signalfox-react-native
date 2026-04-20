@@ -1,5 +1,5 @@
 /**
- * Provider de auto-analytics. Inicializa el core, registra integraciones y expone track vía context.
+ * Auto-analytics provider. Initializes the core, registers integrations, and exposes track via context.
  */
 
 import React, {
@@ -94,7 +94,7 @@ export function SignalFoxProvider({
         logOnly,
       });
 
-      // Versión (y resto de metadata nativa de transporte) antes de registrar listeners:
+      // Version (and the rest of the native transport metadata) before registering listeners:
       // p. ej. `appStateIntegration` emite `app_open`/`session_start` en el mismo tick de setup.
       await instance.init();
       if (isCancelled) {
@@ -114,15 +114,15 @@ export function SignalFoxProvider({
           integration.name === EXPO_ROUTER_INTEGRATION_NAME
       );
       if (hasNavigationIntegration) {
-        // Cinturón y tirantes: si hay integración de navegación, asumimos una transición
-        // inicial pendiente para que eventos tempranos (p. ej. flow_step_view) no se
-        // procesen antes de tener oportunidad de resolver pantalla activa.
+        // Belt and suspenders: if there is a navigation integration, assume an initial
+        // pending transition so early events (for example, flow_step_view) are not
+        // processed before we have a chance to resolve the active screen.
         instance.markNavigationIntentPending?.();
       }
-      // Tras `init()`: si incluyes una integración de navegación (`reactNavigationIntegration`
-      // o `expoRouterIntegration`), su `setup` marca intención de navegación y registra
-      // listeners. Así el primer `trackStep` no gana la carrera a un `screen_view`.
-      // Sin integración de navegación, nadie marca pending.
+      // After `init()`: if you include a navigation integration (`reactNavigationIntegration`
+      // or `expoRouterIntegration`), its `setup` marks navigation intent and registers
+      // listeners. This way the first `trackStep` does not beat `screen_view` in a race.
+      // Without a navigation integration, nothing marks pending.
       cleanupRef.current = list.map((integration) =>
         integration.setup(instance, setupContext)
       );

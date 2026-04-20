@@ -7,8 +7,8 @@ export type PurchaseEnvironment = 'sandbox' | 'production' | 'unknown';
 export type PurchaseProductType = 'subscription' | 'inapp' | 'unknown';
 
 /**
- * Eventos internos del SDK (canónicos) relacionados con compras.
- * Importante: el backend los agrupa con `family = "purchase"` vía taxonomía.
+ * Canonical internal SDK events related to purchases.
+ * Important: the backend groups them under `family = "purchase"` through taxonomy.
  */
 export type PurchaseAnalyticsEventName =
   | 'purchase_started'
@@ -39,8 +39,8 @@ export interface NativePurchaseEventPayload {
   environment?: PurchaseEnvironment;
 
   /**
-   * Solo para eventos de reconciliación/restauración (si aplica).
-   * Ej: lista de productIds con compras activas.
+   * Only for reconciliation/restore events (if applicable).
+   * Example: list of productIds with active purchases.
    */
   restoredProductIds?: string[];
 
@@ -51,8 +51,8 @@ export interface NativePurchaseEventPayload {
   errorMessage?: string;
 
   /**
-   * Contexto nativo adicional (opcional). Evitamos depender de su forma exacta
-   * en la normalización para mantener compatibilidad.
+   * Additional native context (optional). We avoid depending on its exact shape
+   * during normalization to preserve compatibility.
    */
   rawContext?: Record<string, unknown>;
 }

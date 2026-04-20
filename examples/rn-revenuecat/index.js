@@ -1,5 +1,5 @@
 /**
- * Los parches deben ejecutarse con require() antes de cargar App (evita hoisting de import).
+ * Patches must run with require() before loading App (avoids import hoisting).
  */
 require('react-native-gesture-handler');
 const signalFox = require('@asgami-digital/signalfox-react-native');

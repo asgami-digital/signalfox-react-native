@@ -185,6 +185,14 @@ function loadNitroModulesRuntime(): PurchaseModule | null {
   }
 }
 
+function warnMissingNitroInDev(): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+  if (loadNitroModulesRuntime()) return;
+  console.error(
+    '[SignalFox][react-native-iap] Nitro was not detected. Full purchase event coverage is only guaranteed on Nitro-based react-native-iap versions.'
+  );
+}
+
 function patchNitroRequestPurchaseIfNeeded(hybridObject: unknown): boolean {
   const target = asRecord(hybridObject);
   if (!target) return false;
@@ -1013,6 +1021,7 @@ export function reactNativeIapIntegration(
 
     setup(core) {
       registerPurchaseAnalyticsCore(core);
+      warnMissingNitroInDev();
 
       if (module) {
         startReactNativeIapPurchaseAnalytics(module);

@@ -36,7 +36,7 @@ function pickOptionalString(value: unknown): string | null {
   return t.length > 0 ? t : null;
 }
 
-/** Nunca enviar `signalFoxId` (ni `target_id` equivalente) como cadena vacía. */
+/** Never send `signalFoxId` (or its equivalent `target_id`) as an empty string. */
 function signalFoxIdOrNull(value: string | null | undefined): string | null {
   if (value == null) return null;
   const t = value.trim();

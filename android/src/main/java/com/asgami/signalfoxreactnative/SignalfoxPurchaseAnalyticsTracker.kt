@@ -78,7 +78,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       return@PurchasesUpdatedListener
     }
 
-    // purchase_cancelled se emite desde JS vía react-native-purchases (wrappers de compra).
+    // purchase_cancelled is emitted from JS through react-native-purchases (purchase wrappers).
     val eventName = "purchase_failed"
 
     val productFromPurchase = purchases?.firstOrNull()?.products?.firstOrNull()
@@ -120,12 +120,12 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     client.startConnection(object : BillingClientStateListener {
       override fun onBillingSetupFinished(billingResult: BillingResult) {
         Log.d(TAG, "BillingClient onBillingSetupFinished code=${billingResult.responseCode} debug=${billingResult.debugMessage}")
-        // No emitimos aquí. Esperamos callbacks o reconciliación.
+        // Do not emit here. Wait for callbacks or reconciliation.
       }
 
       override fun onBillingServiceDisconnected() {
         Log.d(TAG, "BillingClient onBillingServiceDisconnected")
-        // El servicio puede desconectarse. No hacemos reconexión automática para evitar bucles.
+        // The service may disconnect. We do not auto-reconnect to avoid loops.
       }
     })
   }
@@ -406,8 +406,8 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
       val phases = offer?.pricingPhases?.pricingPhaseList
       val chosen = phases?.firstOrNull()
 
-      // Inferimos trial/intro si existe una fase con precio 0.
-      // No garantizamos (sin más metadatos) que la compra haya usado esa fase.
+      // Infer trial/intro if there is a phase with price 0.
+      // We cannot guarantee (without more metadata) that the purchase actually used that phase.
       val trialPhase = phases?.firstOrNull { phase -> phase.priceAmountMicros == 0L }
 
       val hasTrial = trialPhase != null
@@ -440,7 +440,7 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
 
   private fun parseDaysFromBillingPeriod(billingPeriod: String?): Int? {
     if (billingPeriod == null) return null
-    // Ejemplos típicos: "P7D", "P1W", "P1M"
+    // Typical examples: "P7D", "P1W", "P1M"
     val m = Regex("P(\\d+)([DWMY])").find(billingPeriod) ?: return null
     val value = m.groupValues[1].toIntOrNull() ?: return null
     return when (m.groupValues[2]) {
@@ -452,4 +452,3 @@ internal final class SignalfoxPurchaseAnalyticsTracker(
     }
   }
 }
-

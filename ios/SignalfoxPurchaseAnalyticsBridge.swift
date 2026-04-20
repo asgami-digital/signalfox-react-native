@@ -9,8 +9,8 @@ private let kSignalfoxPurchaseEventChannel = "signalfox_purchase_event"
 private let kSignalfoxRestoreReplaySignedVsPurchaseSkewSeconds: TimeInterval = 180
 
 /// ISO 4217 best-effort. StoreKit 2 `Product` no tiene `priceLocale` (eso es `SKProduct` / StoreKit 1).
-/// Desde iOS 16: `priceFormatStyle.locale`. En iOS 15 solo existe `price`/`displayPrice` sin código ISO;
-/// usamos el locale actual del dispositivo como aproximación de la tienda.
+/// Since iOS 16: `priceFormatStyle.locale`. On iOS 15 only `price`/`displayPrice` exists without an ISO code;
+/// we use the device's current locale as a store approximation.
 @available(iOS 15.0, *)
 private func storeKitCurrencyCode(for product: Product) -> String? {
   if #available(iOS 16.0, *) {
@@ -20,7 +20,7 @@ private func storeKitCurrencyCode(for product: Product) -> String? {
   return Locale.current.currencyCode
 }
 
-/// `Product.products` puede colgar indefinidamente en sandbox/simulador; sin tope bloqueábamos el `emit` a JS.
+/// `Product.products` can hang indefinitely in sandbox/simulator; without a timeout we used to block `emit` to JS.
 @available(iOS 15.0, *)
 private func loadFirstProduct(productId: String, timeoutNs: UInt64 = 2_000_000_000) async -> Product? {
   let timeoutSec = Double(timeoutNs) / 1_000_000_000.0
@@ -124,13 +124,13 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
     isRunning = true
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] startNativePurchaseAnalytics()")
 
-    // SKPaymentQueue cubre cancelaciones y fallos del flujo de compra.
+    // SKPaymentQueue covers purchase-flow cancellations and failures.
     let observer = PaymentQueueObserver()
     paymentQueueObserver = observer
     SKPaymentQueue.default().add(observer)
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue observer added")
 
-    // StoreKit 2 cubre completados (incluyendo restauraciones a nivel de transacción).
+    // StoreKit 2 covers completions (including transaction-level restores).
     if #available(iOS 15.0, *) {
       transactionUpdatesTask = Task.detached(priority: .background) { [weak self] in
         guard let self else { return }
@@ -189,7 +189,7 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
           reject("RECONCILE_PURCHASES_ERROR", "Failed to reconcile purchases", error)
         }
       } else {
-        // Sin StoreKit2 no podemos hacer reconciliación fiable.
+        // Without StoreKit2 we cannot perform reliable reconciliation.
         resolve(nil)
       }
     }
@@ -282,7 +282,7 @@ final class SignalfoxPurchaseAnalyticsTracker: NSObject {
   }
 }
 
-// MARK: - Observación SKPaymentQueue (cancel/fail/start)
+// MARK: - SKPaymentQueue observation (cancel/fail/start)
 
 private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver {
   private func storeKitPriceInfo(for productId: String) async -> (price: Double?, currency: String?, productType: String?, hasTrial: Bool, trialDays: Int?) {
@@ -302,15 +302,15 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     let introOffer = product.subscription?.introductoryOffer
 
     // Inferimos trial/intro si el producto tiene una oferta configurada.
-    // StoreKit no nos da (en este puente) la certeza de que ESA transacción
-    // haya sido efectivamente la que usó el intro offer.
+    // StoreKit does not give us (through this bridge) certainty that THAT transaction
+    // was actually the one that used the intro offer.
     var hasTrial = introOffer != nil
     var trialDays: Int? = nil
 
     if let introOffer {
       let period = introOffer.period
-      // Nota: calculamos una aproximación en días.
-      // Si el periodo está en meses/años, esto es inferido.
+      // Note: we compute an approximation in days.
+      // If the period is in months/years, this is inferred.
       switch period.unit {
       case .day:
         trialDays = period.value
@@ -328,8 +328,8 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
     return (price, currency, isSubscription ? "subscription" : "inapp", hasTrial, trialDays)
   }
 
-  /// `purchase_started` / `purchase_cancelled` no se emiten desde StoreKit 1 aquí:
-  /// se cubren vía JS cuando la app usa `react-native-purchases` (ver integración TS).
+  /// `purchase_started` / `purchase_cancelled` are not emitted from StoreKit 1 here:
+  /// they are covered via JS when the app uses `react-native-purchases` (see TS integration).
 
   private func emitPurchaseFailed(transaction: SKPaymentTransaction) {
     let productId = transaction.payment.productIdentifier
@@ -367,7 +367,7 @@ private final class PaymentQueueObserver: NSObject, SKPaymentTransactionObserver
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=failed product=%@", transaction.payment.productIdentifier)
         emitPurchaseFailed(transaction: transaction)
       case .restored:
-        // Replay del historial al restaurar: no analytics aquí (un solo `restore_completed` vía reconcile).
+        // Replay of history while restoring: no analytics here (a single `restore_completed` through reconcile).
         NSLog(
           "[SignalfoxPurchaseAnalyticsBridge][iOS] SKPaymentQueue state=restored ignored product=%@",
           transaction.payment.productIdentifier
@@ -423,7 +423,7 @@ private extension SignalfoxPurchaseAnalyticsTracker {
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Transaction.updates verified productID=%@", transaction.productID)
         await emitForVerifiedTransaction(transaction)
       } catch {
-        // Las transacciones no verificadas se omiten para no registrar eventos inexactos.
+        // Unverified transactions are skipped to avoid recording inaccurate events.
         NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] Transaction.updates unverified payload skipped")
       }
     }
@@ -447,8 +447,8 @@ private extension SignalfoxPurchaseAnalyticsTracker {
       return
     }
 
-    // StoreKit2: `transaction.environment` está disponible desde iOS 16.
-    // Usamos una conversión best-effort sin `switch` para evitar errores de exhaustividad
+    // StoreKit2: `transaction.environment` is available starting in iOS 16.
+    // We use a best-effort conversion without `switch` to avoid exhaustiveness errors
     // por variaciones del enum entre toolchains/SDKs.
     let environment: String = {
       guard #available(iOS 16.0, *) else { return "unknown" }
@@ -480,7 +480,7 @@ private extension SignalfoxPurchaseAnalyticsTracker {
       currency = storeKitCurrencyCode(for: product)
 
       if let introOffer = product.subscription?.introductoryOffer {
-        // Inferencia a partir de configuración del producto (no implica que esta transacción usara el intro).
+        // Inference based on product configuration (does not imply this transaction used the intro).
         hasTrial = true
         let period = introOffer.period
         switch period.unit {
@@ -537,12 +537,12 @@ private extension SignalfoxPurchaseAnalyticsTracker {
       ])
     }
 
-    // No emitimos `trial_started`: el catálogo puede tener trial aunque el usuario ya lo haya
-    // consumido; no hay forma fiable aquí de saber si aplica. Solo `subscription_started`.
+    // We do not emit `trial_started`: the catalog may have a trial even if the user has already
+    // consumed it; there is no reliable way here to know whether it applies. Only `subscription_started`.
 
-    // IMPORTANTE: en StoreKit2 se recomienda terminar la transacción para evitar
-    // re-emisiones en `Transaction.updates`. Esto no consume la compra, solo marca
-    // que el "consumer" (este puente) ya la procesó para analytics.
+    // IMPORTANT: with StoreKit2 it is recommended to finish the transaction to avoid
+    // re-emissions in `Transaction.updates`. This does not consume the purchase; it only marks
+    // that the "consumer" (this bridge) already processed it for analytics.
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction: calling transaction.finish() productId=%@", productId)
     await transaction.finish()
     NSLog("[SignalfoxPurchaseAnalyticsBridge][iOS] emitForVerifiedTransaction END productId=%@", productId)

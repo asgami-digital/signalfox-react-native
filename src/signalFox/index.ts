@@ -1,5 +1,5 @@
 /**
- * Auto Analytics – captura automática de eventos (AppState, navegación, compras).
+ * Auto Analytics - automatic event capture (AppState, navigation, purchases).
  * Ver docs/auto-analytics-experiment.md
  */
 

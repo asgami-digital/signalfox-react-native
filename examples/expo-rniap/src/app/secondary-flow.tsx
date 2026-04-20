@@ -8,11 +8,11 @@ export default function SecondaryFlowScreen() {
   return (
     <DemoScreen
       title="SecondaryFlowScreen"
-      subtitle="Secondary screen for testing additional navigation, clicks, and router modal opening."
+      subtitle="Secondary screen for testing additional navigation and clicks without duplicating the router modal flow."
     >
       <InfoCard
         title="Suggested Usage"
-        body="Navigate between Home, PurchaseScreen, and the router modal to simulate realistic subscription app steps."
+        body="Navigate between Home and PurchaseScreen to simulate realistic subscription app steps while keeping the router modal tied to a single entry point."
       />
 
       <ActionButton
@@ -24,18 +24,9 @@ export default function SecondaryFlowScreen() {
         }}
       />
       <ActionButton
-        label="Open router modal"
-        signalFoxId="expo_secondary_open_navigation_modal"
-        variant="secondary"
-        onPress={() => {
-          logDemoEvent('expo_secondary_open_navigation_modal');
-          router.push('/navigation-modal');
-        }}
-      />
-      <ActionButton
         label="Back to Home"
         signalFoxId="expo_secondary_back_home"
-        variant="ghost"
+        variant="secondary"
         onPress={() => {
           logDemoEvent('expo_secondary_back_home');
           router.replace('/');

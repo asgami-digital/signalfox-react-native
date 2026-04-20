@@ -8,12 +8,12 @@ import {
   stopRevenueCatPurchaseAnalyticsIfAvailable,
 } from '../purchase/revenueCatPurchaseAnalytics';
 
-/** Nombre estable de la integración (orden en `sortIntegrationsForSetup`, etc.). */
+/** Stable integration name (ordering in `sortIntegrationsForSetup`, etc.). */
 export const REVENUECAT_ANALYTICS_INTEGRATION_NAME =
   'revenueCatPurchaseAnalytics';
 
 /**
- * Resuelve el objeto con métodos estáticos de compra (p. ej. `purchasePackage`).
+ * Resolves the object with static purchase methods (for example, `purchasePackage`).
  * Acepta el default export o el namespace `import * as Purchases`.
  */
 export function resolveRevenueCatPurchasesExport(purchases: unknown): unknown {
@@ -44,7 +44,7 @@ function resolveRevenueCatUIExport(ui: unknown): unknown {
 
 export interface RevenueCatIntegrationOptions {
   /**
-   * Instancia/módulo `Purchases` de `react-native-purchases`
+   * `Purchases` instance/module from `react-native-purchases`
    * (`import Purchases from 'react-native-purchases'`).
    */
   purchases: unknown;
@@ -56,8 +56,8 @@ export interface RevenueCatIntegrationOptions {
 }
 
 /**
- * Integración de analytics sobre RevenueCat: parchea `Purchases` (y opcionalmente `RevenueCatUI`).
- * No depende del canal nativo de compras; solo registra el core en
+ * Analytics integration for RevenueCat: patches `Purchases` (and optionally `RevenueCatUI`).
+ * It does not depend on the native purchase channel; it only registers the core in
  * `purchaseAnalyticsBridge` para `notifyPurchase*` desde JS.
  */
 export function revenueCatIntegration(

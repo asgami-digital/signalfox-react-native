@@ -25,7 +25,7 @@ const mockedSendEvents = sendEvents as jest.MockedFunction<typeof sendEvents>;
 
 describe('AnalyticsCore navigation intent buffer', () => {
   beforeEach(() => {
-    // Legacy: las promesas del mock nativo deben resolverse junto a temporizadores falsos.
+    // Legacy: native mock promises must be resolved together with fake timers.
     jest.useFakeTimers({ legacyFakeTimers: true });
     mockedSendEvents.mockClear();
   });
@@ -34,7 +34,7 @@ describe('AnalyticsCore navigation intent buffer', () => {
     jest.useRealTimers();
   });
 
-  it('retiene track() hasta clearNavigationIntentPending y conserva timestamp explícito', async () => {
+  it('retains track() until clearNavigationIntentPending and preserves the explicit timestamp', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -65,7 +65,7 @@ describe('AnalyticsCore navigation intent buffer', () => {
     expect(dto.event_timestamp).toBe(new Date(ts).toISOString());
   });
 
-  it('modal_open no se retiene con navigation intent pendiente', async () => {
+  it('modal_open is not retained when navigation intent is pending', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -88,7 +88,28 @@ describe('AnalyticsCore navigation intent buffer', () => {
     expect(sendPayload.events?.[0]?.event_name).toBe('modal_open');
   });
 
-  it('eventos de lifecycle no se retienen con navigation intent pendiente', async () => {
+  it('purchase events are not retained when navigation intent is pending', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+    core.markNavigationIntentPending();
+    core.trackEvent({
+      type: 'purchase_started',
+      payload: {
+        productId: 'pro_monthly',
+        store: 'app_store',
+      },
+    } as any);
+    await core.flush();
+
+    expect(mockedSendEvents).toHaveBeenCalledTimes(1);
+    const sendPayload = mockedSendEvents.mock.calls[0]![0];
+    expect(sendPayload.events?.[0]?.event_name).toBe('purchase_started');
+  });
+
+  it('lifecycle events are not retained when navigation intent is pending', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -111,7 +132,7 @@ describe('AnalyticsCore navigation intent buffer', () => {
     ]);
   });
 
-  it('screen_view no se retiene y actualiza pantalla antes del flush del buffer', async () => {
+  it('screen_view is not retained and updates the screen before the buffer flush', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,
@@ -152,7 +173,7 @@ describe('AnalyticsCore navigation intent buffer', () => {
     expect(during?.screen_name).toBe('Detail');
   });
 
-  it('tras timeout vacía el buffer sin clearNavigationIntentPending', async () => {
+  it('after timeout it flushes the buffer without clearNavigationIntentPending', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
       batchSize: 10,

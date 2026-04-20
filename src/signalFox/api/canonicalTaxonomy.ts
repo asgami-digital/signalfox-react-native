@@ -1,9 +1,9 @@
 /**
- * Taxonomía canónica: event_name, event_family, event_action.
- * Debe coincidir con el contrato del backend.
+ * Canonical taxonomy: event_name, event_family, event_action.
+ * Must match the backend contract.
  *
- * Regla: el par (`event_family`, `event_action`) debe ser **único** por tipo de evento
- * (no reutilizar la misma acción para otro `event_name` dentro de la misma familia).
+ * Rule: the (`event_family`, `event_action`) pair must be **unique** per event type
+ * (do not reuse the same action for another `event_name` within the same family).
  */
 
 export enum EventFamily {

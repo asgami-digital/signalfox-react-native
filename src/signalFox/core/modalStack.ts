@@ -1,8 +1,8 @@
 /**
- * Estado global en memoria para trackear modales anidados.
- * - push cuando se abre un modal
- * - pop cuando se cierra
- * - el "modal activo" es el último del stack
+ * In-memory global state to track nested modals.
+ * - push when a modal opens
+ * - pop when a modal closes
+ * - the "active modal" is the last one in the stack
  */
 
 export type ModalStackEntrySource =
@@ -60,7 +60,7 @@ function normalizeModalStackEntry(
 
 function maybeLogModalStack(action: string, modalId?: string | null): void {
   // En RN suele existir global __DEV__. Si no existe, logueamos igualmente
-  // (preferimos visibilidad en debugging a perder información).
+  // (we prefer debug visibility over losing information).
   let isDev = false;
   const globalProcess = (
     globalThis as {
@@ -130,7 +130,7 @@ export function modalStackPop(stackKeyOrId?: string | null): string | null {
       modalStack.pop();
     }
   } else {
-    // Si no tenemos id, no podemos decidir con seguridad qué modal se cerró.
+    // If we do not have an id, we cannot safely decide which modal was closed.
     // Mejor no modificar el stack que adjuntar un parent_modal incorrecto.
   }
 

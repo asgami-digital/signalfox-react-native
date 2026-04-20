@@ -1,5 +1,5 @@
 /**
- * Monkey-patch de react-native Modal para detectar open/close según `visible`.
+ * Monkey-patch for react-native Modal to detect open/close based on `visible`.
  */
 
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
@@ -89,7 +89,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     closeEmittedRef.current = true;
     openEmittedRef.current = false;
 
-    // Para modal_close, el parent debe ser el modal "anterior" (stack después del pop).
+    // For modal_close, the parent must be the "previous" modal (stack after the pop).
     const parentModal =
       typeof targetId === 'string' && targetId.length > 0
         ? modalStackPop(targetId)
@@ -135,7 +135,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     }
 
     prevVisibleRef.current = visible;
-    // Solo reaccionamos a `visible`; el nombre se toma en cada transición desde props actuales.
+    // We only react to `visible`; the name is read on each transition from current props.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [props.visible]);
 

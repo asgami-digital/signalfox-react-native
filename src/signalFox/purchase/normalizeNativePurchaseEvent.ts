@@ -67,11 +67,11 @@ function buildPurchaseDisplayName(
 }
 
 /**
- * Normaliza un evento nativo (StoreKit/Billing) hacia un evento canónico del backend.
+ * Normalizes a native event (StoreKit/Billing) into a canonical backend event.
  *
  * Contrato:
- * - `family` siempre será `"purchase"`.
- * - La normalización es "conservadora": si un campo no existe en el nativo, se omite.
+ * - `family` will always be `"purchase"`.
+ * - Normalization is "conservative": if a field does not exist on the native event, it is omitted.
  */
 export function normalizeNativePurchaseEventToAnalyticsEvent(
   input: NativePurchaseEventPayload
@@ -111,10 +111,10 @@ export function normalizeNativePurchaseEventToAnalyticsEvent(
       : undefined,
     errorCode: pickOptionalString(input.errorCode),
     errorMessage: pickOptionalString(input.errorMessage),
-    // rawContext es intencionalmente omitido en la normalización para mantenerla limpia.
+    // rawContext is intentionally omitted from normalization to keep it clean.
   };
 
-  // Limpieza: eliminar claves undefined para que properties_json sea más limpio.
+  // Cleanup: remove undefined keys so properties_json stays cleaner.
   for (const [k, v] of Object.entries(properties)) {
     if (typeof v === 'undefined') delete properties[k];
   }

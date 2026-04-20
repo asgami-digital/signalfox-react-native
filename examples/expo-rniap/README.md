@@ -1,13 +1,13 @@
 # expo-rniap
 
-Ejemplo Expo Router para probar SignalFox con:
+Expo Router example for testing SignalFox with:
 
 - Expo SDK 55
 - Expo Router
 - `react-native-iap`
-- modal nativo y modal presentado por router
+- native modal and router-presented modal
 
-## Pantallas
+## Screens
 
 - `/` → `Home`
 - `/purchase` → `PurchaseScreen`
@@ -15,22 +15,22 @@ Ejemplo Expo Router para probar SignalFox con:
 - `/secondary-flow` → `SecondaryFlowScreen`
 - `/navigation-modal` → `NavigationModal`
 
-## Ejecutar
+## Run
 
-Instala dependencias si hace falta:
+Install dependencies if needed:
 
 ```sh
 cd examples/expo-rniap
 npm install
 ```
 
-Arranque de desarrollo:
+Development startup:
 
 ```sh
 npm run start
 ```
 
-Development build nativo:
+Native development build:
 
 ```sh
 npm run ios
@@ -42,23 +42,23 @@ o:
 npm run android
 ```
 
-## Configuración manual pendiente
+## Pending Manual Configuration
 
-1. Crea `examples/expo-rniap/.env.local`
-2. Añade tu API key de SignalFox
-3. Edita `src/config/demoConfig.ts` y sustituye los product IDs si hace falta
+1. Create `examples/expo-rniap/.env.local`
+2. Add your SignalFox API key
+3. Edit `src/config/demoConfig.ts` and replace the product IDs if needed
 
 ```sh
 EXPO_PUBLIC_SIGNALFOX_API_KEY=ak_dev__your_key_here
 ```
 
-Sustituye:
+Replace:
 
 - `REPLACE_WITH_IOS_SUBSCRIPTION_PRODUCT_ID`
 - `REPLACE_WITH_ANDROID_SUBSCRIPTION_PRODUCT_ID`
 
-## Notas
+## Notes
 
-- `react-native-iap` requiere development build; no sirve en Expo Go.
-- `expo prebuild --no-install` ya se probó para validar autolinking y generación nativa.
-- La navegación ya usa `expoRouterIntegration()` desde la librería, alimentada con `useNavigationContainerRef()` de `expo-router`.
+- `react-native-iap` requires a development build; it does not work in Expo Go.
+- `expo prebuild --no-install` has already been tested to validate autolinking and native project generation.
+- Navigation already uses `expoRouterIntegration()` from the library, fed by `useNavigationContainerRef()` from `expo-router`.
