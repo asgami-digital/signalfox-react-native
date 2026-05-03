@@ -5,7 +5,8 @@
  */
 
 import { AppState, Platform, type AppStateStatus } from 'react-native';
-import type { AnalyticsIntegration } from '../types/integration';
+import type { AnalyticsIntegration, IAnalyticsCore } from '../types/integration';
+import { ENGAGEMENT_SESSION_INACTIVITY_MS } from '../core/constants';
 
 type LifecycleSignal = 'enter_background' | 'enter_foreground' | null;
 
@@ -51,18 +52,20 @@ export function appStateIntegration(): AnalyticsIntegration {
     name: 'appState',
 
     setup(core, _context) {
+      const internalCore = core as IAnalyticsCore;
       let previousState =
         (AppState.currentState as AppStateStatus) ??
         ('active' as AppStateStatus);
       const isIOS = Platform.OS === 'ios';
       let hasTrackedInitialOpen = false;
+      let lastBackgroundedAt: number | null = null;
 
       const trackInitialOpenIfNeeded = (state: AppStateStatus): boolean => {
         if (hasTrackedInitialOpen || state !== 'active') {
           return false;
         }
-        core.trackEvent({ type: 'app_open' });
-        core.trackEvent({ type: 'session_start' });
+        internalCore.trackEvent({ type: 'app_open' });
+        internalCore.trackEvent({ type: 'session_start' });
         hasTrackedInitialOpen = true;
         return true;
       };
@@ -88,11 +91,20 @@ export function appStateIntegration(): AnalyticsIntegration {
           });
 
           if (!trackedInitialOpenNow && signal === 'enter_foreground') {
-            core.trackEvent({ type: 'app_foreground' });
-            core.trackEvent({ type: 'session_start' });
+            const now = Date.now();
+            if (
+              lastBackgroundedAt != null &&
+              now - lastBackgroundedAt >= ENGAGEMENT_SESSION_INACTIVITY_MS
+            ) {
+              internalCore.renewEngagementSession?.();
+            }
+            internalCore.trackEvent({ type: 'app_foreground' });
+            internalCore.trackEvent({ type: 'session_start' });
+            lastBackgroundedAt = null;
           } else if (!trackedInitialOpenNow && signal === 'enter_background') {
-            core.trackEvent({ type: 'app_background' });
-            core.trackEvent({ type: 'session_end' });
+            lastBackgroundedAt = Date.now();
+            internalCore.trackEvent({ type: 'app_background' });
+            internalCore.trackEvent({ type: 'session_end' });
           }
 
           if (nextState === 'inactive' || nextState === 'background') {

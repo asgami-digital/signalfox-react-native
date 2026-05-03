@@ -480,6 +480,91 @@ describe('revenueCatPurchaseAnalytics', () => {
     analyticsModule.stopRevenueCatPurchaseAnalyticsIfAvailable();
   });
 
+  it('usa fallback de AppState para emitir purchase_started/cancelled si el bridge nativo no marca inactive', async () => {
+    const notifyModalOpened = jest.fn();
+    const notifyModalClosed = jest.fn();
+    const notifyPurchaseStarted = jest.fn();
+    const notifyPurchaseCancelled = jest.fn();
+    const notifyPurchaseCompleted = jest.fn();
+    const notifyPurchaseFailed = jest.fn();
+    const notifyRestoreCompleted = jest.fn();
+    const beginHeuristicPaywallSession = jest.fn(() => Promise.resolve());
+    const endHeuristicPaywallSession = jest.fn(() =>
+      Promise.resolve({
+        sawInactiveDuringPaywall: false,
+      })
+    );
+    const presentPaywall = jest.fn(async () => {
+      appStateChangeListener?.('inactive');
+      return 'CANCELLED';
+    });
+    let appStateChangeListener: ((state: string) => void) | null = null;
+
+    jest.doMock('react-native', () => ({
+      Platform: { OS: 'ios' },
+      AppState: {
+        addEventListener: (_eventName: string, listener: (s: string) => void) => {
+          appStateChangeListener = listener;
+          return {
+            remove: () => {
+              appStateChangeListener = null;
+            },
+          };
+        },
+      },
+    }));
+    jest.doMock('../../../NativeSignalfoxReactNative', () => ({
+      __esModule: true,
+      default: {
+        beginHeuristicPaywallSession,
+        endHeuristicPaywallSession,
+      },
+    }));
+    jest.doMock(
+      '../purchaseAnalyticsBridge',
+      () => ({
+        notifyModalClosed,
+        notifyModalOpened,
+        notifyPurchaseStarted,
+        notifyPurchaseCancelled,
+        notifyPurchaseCompleted,
+        notifyPurchaseFailed,
+        notifyRestoreCompleted,
+      }),
+      { virtual: false }
+    );
+
+    class RevenueCatUI {}
+    (RevenueCatUI as any).presentPaywall = presentPaywall;
+
+    const analyticsModule =
+      require('../revenueCatPurchaseAnalytics') as typeof import('../revenueCatPurchaseAnalytics');
+    analyticsModule.startRevenueCatPurchaseAnalytics({
+      purchases: {},
+      revenueCatUI: RevenueCatUI,
+    });
+
+    await (RevenueCatUI as any).presentPaywall();
+
+    expect(notifyPurchaseStarted).toHaveBeenCalledTimes(1);
+    expect(notifyPurchaseStarted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'ios',
+        store: 'app_store',
+        timestamp: expect.any(Number),
+      })
+    );
+    expect(notifyPurchaseCancelled).toHaveBeenCalledTimes(1);
+    expect(notifyPurchaseCancelled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'ios',
+        store: 'app_store',
+      })
+    );
+
+    analyticsModule.stopRevenueCatPurchaseAnalyticsIfAvailable();
+  });
+
   it('emite purchase_cancelled si presentPaywall termina en CANCELLED tras haber arrancado una compra sin terminal', async () => {
     const notifyModalOpened = jest.fn();
     const notifyModalClosed = jest.fn();

@@ -1,4 +1,4 @@
-import type { AnalyticsIntegration } from '../types/integration';
+import type { AnalyticsIntegration, IAnalyticsCore } from '../types/integration';
 import {
   registerPurchaseAnalyticsCore,
   unregisterPurchaseAnalyticsCore,
@@ -69,7 +69,8 @@ export function revenueCatIntegration(
     name: REVENUECAT_ANALYTICS_INTEGRATION_NAME,
 
     setup(core, _context) {
-      registerPurchaseAnalyticsCore(core);
+      const internalCore = core as IAnalyticsCore;
+      registerPurchaseAnalyticsCore(internalCore);
 
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const hasPkg =

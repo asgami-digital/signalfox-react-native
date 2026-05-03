@@ -108,6 +108,9 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     event_id: generateEventId(),
     anonymous_id: pickOptionalString(event.anonymous_id),
     session_id: pickOptionalString(event.session_id),
+    engagement_session_id: pickOptionalString(
+      (event as { engagement_session_id?: unknown }).engagement_session_id
+    ),
     event_name: triple.event_name,
     event_family: String(triple.event_family),
     event_action: triple.event_action,

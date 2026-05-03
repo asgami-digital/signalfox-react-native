@@ -1,14 +1,8 @@
-import type { AnalyticsIntegration } from '../types/integration';
-
-/**
- * Si usas ambas, `nativePurchaseAnalytics` antes que `revenueCatPurchaseAnalytics`:
- * la nativa puede registrar el core y extras antes de parchear Purchases (opcional).
- */
-export function sortIntegrationsForSetup(
-  list: readonly AnalyticsIntegration[]
-): AnalyticsIntegration[] {
+export function sortIntegrationsForSetup<T extends { name: string }>(
+  list: readonly T[]
+): T[] {
   const priority = (name: string): number => {
-    if (name === 'nativePurchaseAnalytics') return 0;
+    if (name === 'appState') return 0;
     if (name === 'revenueCatPurchaseAnalytics') return 1;
     return 2;
   };

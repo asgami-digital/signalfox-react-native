@@ -8,7 +8,7 @@ import SignalfoxReactNative from '../../NativeSignalfoxReactNative';
 import type {
   AnalyticsEvent,
   AnalyticsEventType,
-  FlowStepParams,
+  FunnelStepParams,
   SubviewParams,
 } from '../types/events';
 import type { IAnalyticsCore } from '../types/integration';
@@ -29,6 +29,7 @@ import {
   isPurchaseFlowTerminalEventType,
   NAVIGATION_INTENT_BUFFER_MAX_MS,
   PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS,
+  SURFACE_CONTEXT_HISTORY_WINDOW_MS,
   shouldDelayScreenResolution,
 } from './constants';
 import { getActiveModalId } from './modalStack';
@@ -97,6 +98,104 @@ interface PurchaseSurfaceContextSnapshot {
   parentModal: string | null;
   productId: string | null;
   startedAt: number;
+  firstInterveningAt: number | null;
+}
+
+interface SurfaceContextSnapshot {
+  screenName: string | null;
+  parentModal: string | null;
+  timestamp: number;
+}
+
+class PurchaseFlowTracker {
+  private pendingFlow: PurchaseSurfaceContextSnapshot | null = null;
+  private readonly recentFlows: PurchaseSurfaceContextSnapshot[] = [];
+
+  start(flow: PurchaseSurfaceContextSnapshot): void {
+    this.pendingFlow = flow;
+    this.recentFlows.push(flow);
+    this.prune(flow.startedAt);
+  }
+
+  markIntervening(timestamp: number): void {
+    if (this.pendingFlow && this.pendingFlow.firstInterveningAt === null) {
+      this.pendingFlow.firstInterveningAt = timestamp;
+    }
+  }
+
+  resolveTerminal(
+    eventTimestamp: number,
+    productId: string | null
+  ): PurchaseSurfaceContextSnapshot | null {
+    this.prune(eventTimestamp);
+
+    if (
+      this.pendingFlow &&
+      (productId == null ||
+        this.pendingFlow.productId == null ||
+        this.pendingFlow.productId === productId)
+    ) {
+      return this.pendingFlow;
+    }
+
+    if (productId == null) {
+      return null;
+    }
+
+    for (let i = this.recentFlows.length - 1; i >= 0; i--) {
+      const candidate = this.recentFlows[i];
+      if (candidate?.productId === productId) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  adjustedTerminalTimestamp(
+    flow: PurchaseSurfaceContextSnapshot | null,
+    terminalTimestamp: number
+  ): number {
+    if (!flow || flow.firstInterveningAt === null) {
+      return terminalTimestamp;
+    }
+    return computePurchaseTerminalAdjustedTimestamp(
+      flow.startedAt,
+      flow.firstInterveningAt
+    );
+  }
+
+  completeTerminal(productId: string | null): void {
+    if (
+      this.pendingFlow == null ||
+      productId == null ||
+      this.pendingFlow.productId == null ||
+      this.pendingFlow.productId === productId
+    ) {
+      this.pendingFlow = null;
+    }
+  }
+
+  reset(): void {
+    this.pendingFlow = null;
+    this.recentFlows.splice(0, this.recentFlows.length);
+  }
+
+  private prune(referenceTs: number): void {
+    while (this.recentFlows.length > 0) {
+      const first = this.recentFlows[0];
+      if (!first) {
+        break;
+      }
+      if (
+        referenceTs - first.startedAt <=
+        PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS
+      ) {
+        break;
+      }
+      this.recentFlows.shift();
+    }
+  }
 }
 
 function nullIfEmptySignalFoxId(value: string | null): string | null {
@@ -122,7 +221,6 @@ function buildGenericSignalFoxId(params: {
 }): string | null {
   const { family, screenName, eventType, explicitSignalFoxId, stepName } =
     params;
-  console.log('buildGenericSignalFoxId', params);
 
   if (
     explicitSignalFoxId &&
@@ -221,6 +319,7 @@ export class AnalyticsCore implements IAnalyticsCore {
 
   private anonymousId: string;
   private sessionId: string | null = null;
+  private engagementSessionId: string | null = null;
   private currentScreenName: string | null = null;
   private readonly queue: QueuedEvent[] = [];
   /**
@@ -240,20 +339,8 @@ export class AnalyticsCore implements IAnalyticsCore {
   > = [];
   private navigationIntentTimeoutListener: (() => void) | null = null;
 
-  /** Timestamp of the last processed `purchase_started` (flow pending closure). */
-  private pendingPurchaseStartedTimestamp: number | null = null;
-  /** Timestamp del primer evento no terminal entre started y completed/cancel/fail. */
-  private firstTimestampAfterPurchaseStarted: number | null = null;
-  /**
-   * Pantalla y modal activos en el momento de `purchase_started`, reutilizados en
-   * `purchase_completed` / `purchase_failed` / `purchase_cancelled` (same attribution
-   * as the flow start even if the store sheet closes or changes the screen).
-   */
-  private pendingPurchaseSurfaceContext: PurchaseSurfaceContextSnapshot | null =
-    null;
-  /** Recent purchase starts kept for a short SKU-based fallback window. */
-  private readonly recentPurchaseSurfaceContexts: PurchaseSurfaceContextSnapshot[] =
-    [];
+  private readonly purchaseFlow = new PurchaseFlowTracker();
+  private readonly surfaceContextHistory: SurfaceContextSnapshot[] = [];
 
   constructor(config: AnalyticsCoreConfig) {
     this.apiKey = config.apiKey;
@@ -333,20 +420,30 @@ export class AnalyticsCore implements IAnalyticsCore {
 
   startSession(): void {
     this.sessionId = generateId();
+    this.engagementSessionId = generateId();
   }
 
   endSession(): void {
     this.sessionId = null;
+    this.engagementSessionId = null;
   }
 
   getSessionId(): string | null {
     return this.sessionId;
   }
 
+  renewEngagementSession(): void {
+    this.engagementSessionId = generateId();
+  }
+
+  getEngagementSessionId(): string | null {
+    return this.engagementSessionId;
+  }
+
   markNavigationIntentPending(): void {
     // Hard retention cap: if there is already a pending intent, do not extend the timeout.
     // Prevents bursts of actions (__unsafe_action__) from keeping events retained
-    // indefinitely (for example, flow_step_view on the first screen).
+    // indefinitely (for example, funnel step / flow_step_view on the first screen).
     if (this.navigationIntentPendingSinceMs !== null) {
       return;
     }
@@ -419,63 +516,9 @@ export class AnalyticsCore implements IAnalyticsCore {
     return this.pickOptionalString(payload?.productId);
   }
 
-  private pruneRecentPurchaseSurfaceContexts(referenceTs: number): void {
-    while (this.recentPurchaseSurfaceContexts.length > 0) {
-      const first = this.recentPurchaseSurfaceContexts[0];
-      if (!first) {
-        break;
-      }
-      if (
-        referenceTs - first.startedAt <=
-        PURCHASE_STARTED_ATTRIBUTION_WINDOW_MS
-      ) {
-        break;
-      }
-      this.recentPurchaseSurfaceContexts.shift();
-    }
-  }
-
-  private rememberPurchaseSurfaceContext(
-    context: PurchaseSurfaceContextSnapshot
-  ): void {
-    this.recentPurchaseSurfaceContexts.push(context);
-    this.pruneRecentPurchaseSurfaceContexts(context.startedAt);
-  }
-
-  private resolvePurchaseSurfaceContextForTerminal(
-    eventTimestamp: number,
-    productId: string | null
-  ): PurchaseSurfaceContextSnapshot | null {
-    this.pruneRecentPurchaseSurfaceContexts(eventTimestamp);
-
-    if (
-      this.pendingPurchaseSurfaceContext &&
-      (productId == null ||
-        this.pendingPurchaseSurfaceContext.productId == null ||
-        this.pendingPurchaseSurfaceContext.productId === productId)
-    ) {
-      return this.pendingPurchaseSurfaceContext;
-    }
-
-    if (productId == null) {
-      return null;
-    }
-
-    for (let i = this.recentPurchaseSurfaceContexts.length - 1; i >= 0; i--) {
-      const candidate = this.recentPurchaseSurfaceContexts[i];
-      if (!candidate) {
-        continue;
-      }
-      if (candidate.productId === productId) {
-        return candidate;
-      }
-    }
-
-    return null;
-  }
-
   private resolveScreenName(
-    event: { type: AnalyticsEventType } & Record<string, unknown>
+    event: { type: AnalyticsEventType } & Record<string, unknown>,
+    historicalSurface: SurfaceContextSnapshot | null = null
   ): string | null {
     const direct = this.pickOptionalString(event.screen_name);
     const payload =
@@ -498,6 +541,7 @@ export class AnalyticsCore implements IAnalyticsCore {
         direct ??
         payloadScreen ??
         payloadCurrentScreen ??
+        historicalSurface?.screenName ??
         this.currentScreenName
       );
     }
@@ -508,6 +552,7 @@ export class AnalyticsCore implements IAnalyticsCore {
         direct ??
         payloadScreen ??
         payloadPreviousScreen ??
+        historicalSurface?.screenName ??
         this.currentScreenName
       );
     }
@@ -521,14 +566,42 @@ export class AnalyticsCore implements IAnalyticsCore {
       payloadScreen ??
       payloadCurrentScreen ??
       payloadPreviousScreen ??
-      this.currentScreenName
+      historicalSurface?.screenName ??
+      this.currentScreenName ??
+      null
     );
+  }
+
+  private resolveSurfaceContextAt(
+    eventTimestamp: number
+  ): SurfaceContextSnapshot | null {
+    let best: SurfaceContextSnapshot | null = null;
+    for (const candidate of this.surfaceContextHistory) {
+      if (candidate.timestamp <= eventTimestamp) {
+        if (!best || candidate.timestamp >= best.timestamp) {
+          best = candidate;
+        }
+      }
+    }
+    return best;
+  }
+
+  private rememberSurfaceContext(snapshot: SurfaceContextSnapshot): void {
+    this.surfaceContextHistory.push(snapshot);
+    this.surfaceContextHistory.sort((a, b) => a.timestamp - b.timestamp);
+
+    const minTimestamp = snapshot.timestamp - SURFACE_CONTEXT_HISTORY_WINDOW_MS;
+    while (
+      this.surfaceContextHistory.length > 0 &&
+      this.surfaceContextHistory[0]!.timestamp < minTimestamp
+    ) {
+      this.surfaceContextHistory.shift();
+    }
   }
 
   private processEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
-    console.log('processEvent', event);
     if (this.sendPermanentlyDisabled) {
       if (isPurchaseFamilyEventType(event.type)) {
         console.warn(
@@ -551,34 +624,44 @@ export class AnalyticsCore implements IAnalyticsCore {
         : Date.now();
 
     const eventType = event.type;
+    const terminalProductId = isPurchaseFlowTerminalEventType(eventType)
+      ? this.purchaseProductIdFromEvent(event)
+      : null;
+    const terminalSurfaceContext = isPurchaseFlowTerminalEventType(eventType)
+      ? this.purchaseFlow.resolveTerminal(eventTimestamp, terminalProductId)
+      : null;
+
+    if (
+      isPurchaseFlowTerminalEventType(eventType) &&
+      terminalSurfaceContext == null
+    ) {
+      console.warn(
+        '[AUTO_ANALYTICS] purchase terminal dropped (no matching purchase_started)',
+        {
+          type: eventType,
+          productId: terminalProductId,
+        }
+      );
+      return;
+    }
+
     if (isPurchaseFlowTerminalEventType(eventType)) {
-      if (
-        this.pendingPurchaseStartedTimestamp !== null &&
-        this.firstTimestampAfterPurchaseStarted !== null
-      ) {
-        eventTimestamp = computePurchaseTerminalAdjustedTimestamp(
-          this.pendingPurchaseStartedTimestamp,
-          this.firstTimestampAfterPurchaseStarted
-        );
-      }
-      this.pendingPurchaseStartedTimestamp = null;
-      this.firstTimestampAfterPurchaseStarted = null;
-    } else if (eventType === 'purchase_started') {
-      this.pendingPurchaseStartedTimestamp = eventTimestamp;
-      this.firstTimestampAfterPurchaseStarted = null;
+      eventTimestamp = this.purchaseFlow.adjustedTerminalTimestamp(
+        terminalSurfaceContext,
+        eventTimestamp
+      );
     } else if (
-      this.pendingPurchaseStartedTimestamp !== null &&
+      eventType !== 'purchase_started' &&
       !isPurchaseFlowTerminalEventType(eventType)
     ) {
-      if (this.firstTimestampAfterPurchaseStarted === null) {
-        this.firstTimestampAfterPurchaseStarted = eventTimestamp;
-      }
+      this.purchaseFlow.markIntervening(eventTimestamp);
     }
 
     // We always attach the "parent" modal (last opened) to link UI hierarchies.
     // `reactNativeModalPatch` se encarga de mantener el stack y de que `modal_close`
     // use the previous modal (stack after the pop).
-    const parentModal = getActiveModalId();
+    const historicalSurface = this.resolveSurfaceContextAt(eventTimestamp);
+    const parentModal = historicalSurface?.parentModal ?? getActiveModalId();
     const maybePayload = (event as { payload?: unknown }).payload;
     const nextPayload: Record<string, unknown> =
       maybePayload &&
@@ -594,15 +677,6 @@ export class AnalyticsCore implements IAnalyticsCore {
       nextPayload.parent_modal = parentModal;
     }
 
-    const terminalProductId = isPurchaseFlowTerminalEventType(eventType)
-      ? this.purchaseProductIdFromEvent(event)
-      : null;
-    const terminalSurfaceContext = isPurchaseFlowTerminalEventType(eventType)
-      ? this.resolvePurchaseSurfaceContextForTerminal(
-          eventTimestamp,
-          terminalProductId
-        )
-      : null;
     const applyPurchaseTerminalSurface = terminalSurfaceContext != null;
 
     if (applyPurchaseTerminalSurface) {
@@ -614,7 +688,7 @@ export class AnalyticsCore implements IAnalyticsCore {
 
     const resolvedScreenName = applyPurchaseTerminalSurface
       ? terminalSurfaceContext!.screenName
-      : this.resolveScreenName(event);
+      : this.resolveScreenName(event, historicalSurface);
 
     if (eventType === 'purchase_started') {
       const surfaceContext: PurchaseSurfaceContextSnapshot = {
@@ -622,20 +696,13 @@ export class AnalyticsCore implements IAnalyticsCore {
         parentModal: this.parentModalSnapshotFromPayload(nextPayload),
         productId: this.purchaseProductIdFromEvent(event),
         startedAt: eventTimestamp,
+        firstInterveningAt: null,
       };
-      this.pendingPurchaseSurfaceContext = surfaceContext;
-      this.rememberPurchaseSurfaceContext(surfaceContext);
+      this.purchaseFlow.start(surfaceContext);
     }
 
     if (isPurchaseFlowTerminalEventType(eventType)) {
-      if (
-        this.pendingPurchaseSurfaceContext == null ||
-        terminalProductId == null ||
-        this.pendingPurchaseSurfaceContext.productId == null ||
-        this.pendingPurchaseSurfaceContext.productId === terminalProductId
-      ) {
-        this.pendingPurchaseSurfaceContext = null;
-      }
+      this.purchaseFlow.completeTerminal(terminalProductId);
     }
     const family = getCanonicalTriple(event.type).event_family;
     const explicitSignalFoxId =
@@ -684,6 +751,7 @@ export class AnalyticsCore implements IAnalyticsCore {
       type: event.type as AnalyticsEvent['type'],
       timestamp: eventTimestamp,
       session_id: this.sessionId ?? '',
+      engagement_session_id: this.engagementSessionId ?? '',
       anonymous_id: this.anonymousId,
       platform: Platform.OS as 'ios' | 'android',
       app_version: this.appVersion,
@@ -694,19 +762,23 @@ export class AnalyticsCore implements IAnalyticsCore {
       ...(resolvedScreenName ? { screen_name: resolvedScreenName } : {}),
     } as AnalyticsEvent;
 
-    if (resolvedScreenName && !applyPurchaseTerminalSurface) {
+    if (
+      resolvedScreenName &&
+      !applyPurchaseTerminalSurface &&
+      (eventType === 'screen_view' || historicalSurface == null)
+    ) {
       this.currentScreenName = resolvedScreenName;
     }
 
-    this.queue.push(fullEvent);
-
-    if (isPurchaseFamilyEventType(event.type)) {
-      console.log('[AUTO_ANALYTICS] purchase event queued', {
-        type: event.type,
-        screen_name: resolvedScreenName,
+    if (eventType === 'screen_view' || eventType === 'modal_open') {
+      this.rememberSurfaceContext({
+        screenName: resolvedScreenName,
+        parentModal: getActiveModalId(),
         timestamp: eventTimestamp,
       });
     }
+
+    this.queue.push(fullEvent);
 
     if (this.logOnly) {
       console.log('[AUTO_ANALYTICS]', fullEvent);
@@ -729,14 +801,6 @@ export class AnalyticsCore implements IAnalyticsCore {
   trackEvent(
     event: { type: AnalyticsEventType } & Record<string, unknown>
   ): void {
-    if (event.type === 'app_background') {
-      const receivedAt = Date.now();
-      console.log('[AUTO_ANALYTICS] app_background received', {
-        ts_ms: receivedAt,
-        ts_iso: new Date(receivedAt).toISOString(),
-      });
-    }
-
     const bypassNavigationIntentBuffer =
       isPurchaseFamilyEventType(event.type) ||
       event.type === 'screen_view' ||
@@ -760,36 +824,10 @@ export class AnalyticsCore implements IAnalyticsCore {
       shouldDelayScreenResolution(event.type) &&
       EVENT_SCREEN_RESOLUTION_DELAY_MS > 0
     ) {
-      if (isPurchaseFamilyEventType(event.type)) {
-        console.log(
-          '[AUTO_ANALYTICS] purchase event: waiting screen-resolution delay',
-          {
-            type: event.type,
-            delayMs: EVENT_SCREEN_RESOLUTION_DELAY_MS,
-            currentScreenName: this.currentScreenName,
-          }
-        );
-      }
       setTimeout(() => {
-        if (isPurchaseFamilyEventType(event.type)) {
-          console.log(
-            '[AUTO_ANALYTICS] purchase event: delay elapsed, processing',
-            {
-              type: event.type,
-              currentScreenName: this.currentScreenName,
-            }
-          );
-        }
         this.processEvent(event);
       }, EVENT_SCREEN_RESOLUTION_DELAY_MS);
       return;
-    }
-
-    if (isPurchaseFamilyEventType(event.type)) {
-      console.log('[AUTO_ANALYTICS] purchase event: processing immediately', {
-        type: event.type,
-        currentScreenName: this.currentScreenName,
-      });
     }
 
     this.processEvent(event);
@@ -816,37 +854,37 @@ export class AnalyticsCore implements IAnalyticsCore {
     this.track(name, properties);
   }
 
-  trackStep(params: FlowStepParams): void {
-    const flow =
-      typeof params.flow_name === 'string' ? params.flow_name.trim() : '';
-    const step = typeof params.id === 'string' ? params.id.trim() : '';
+  trackFunnelStep(params: FunnelStepParams): void {
+    const funnelName =
+      typeof params.funnelName === 'string' ? params.funnelName.trim() : '';
+    const step =
+      typeof params.signalFoxNodeId === 'string'
+        ? params.signalFoxNodeId.trim()
+        : '';
     const stepDisplayName =
-      typeof params.displayName === 'string' ? params.displayName.trim() : '';
-    if (!flow || !step) {
+      typeof params.signalFoxNodeDisplayName === 'string'
+        ? params.signalFoxNodeDisplayName.trim()
+        : '';
+    if (!funnelName || !step) {
       console.warn(
-        '[AUTO_ANALYTICS] trackStep requires non-empty flow_name and id'
+        '[AUTO_ANALYTICS] trackFunnelStep requires non-empty funnelName and signalFoxNodeId'
       );
       return;
     }
 
     const ev: Record<string, unknown> = {
       type: 'flow_step_view',
-      flow_name: flow,
+      flow_name: funnelName,
       signalFoxId: step,
       ...(stepDisplayName ? { signalFoxDisplayName: stepDisplayName } : {}),
       step_name: step,
       payload: {},
     };
     if (
-      typeof params.step_index === 'number' &&
-      Number.isFinite(params.step_index)
+      typeof params.stepIndex === 'number' &&
+      Number.isFinite(params.stepIndex)
     ) {
-      ev.step_index = params.step_index;
-    }
-    const explicitScreen =
-      typeof params.screen_name === 'string' ? params.screen_name.trim() : '';
-    if (explicitScreen.length > 0) {
-      ev.screen_name = explicitScreen;
+      ev.step_index = params.stepIndex;
     }
 
     this.trackEvent(
@@ -856,15 +894,22 @@ export class AnalyticsCore implements IAnalyticsCore {
 
   /**
    * Semantic event: internal subview within a screen.
-   * It does not replace trackStep (linear flows), but rather active screen subareas.
+   * It does not replace trackFunnelStep (linear funnels), but rather active screen subareas.
    */
   trackSubview(params: SubviewParams): void {
-    const subviewName = typeof params.id === 'string' ? params.id.trim() : '';
+    const subviewName =
+      typeof params.signalFoxNodeId === 'string'
+        ? params.signalFoxNodeId.trim()
+        : '';
     const subviewDisplayName =
-      typeof params.displayName === 'string' ? params.displayName.trim() : '';
+      typeof params.signalFoxNodeDisplayName === 'string'
+        ? params.signalFoxNodeDisplayName.trim()
+        : '';
 
     if (!subviewName) {
-      console.warn('[AUTO_ANALYTICS] trackSubview requires a non-empty id');
+      console.warn(
+        '[AUTO_ANALYTICS] trackSubview requires a non-empty signalFoxNodeId'
+      );
       return;
     }
 
@@ -995,13 +1040,8 @@ export class AnalyticsCore implements IAnalyticsCore {
   destroy(): void {
     this.stopFlushTimer();
     this.clearNavigationIntentPending();
-    this.pendingPurchaseStartedTimestamp = null;
-    this.firstTimestampAfterPurchaseStarted = null;
-    this.pendingPurchaseSurfaceContext = null;
-    this.recentPurchaseSurfaceContexts.splice(
-      0,
-      this.recentPurchaseSurfaceContexts.length
-    );
+    this.purchaseFlow.reset();
+    this.surfaceContextHistory.splice(0, this.surfaceContextHistory.length);
     this.scheduleFlush();
   }
 }

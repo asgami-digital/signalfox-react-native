@@ -22,6 +22,12 @@ export const EVENT_SCREEN_RESOLUTION_DELAY_MS = 0;
  */
 export const NAVIGATION_INTENT_BUFFER_MAX_MS = 2000;
 
+/** Foreground after this inactivity window starts a new engagement session. */
+export const ENGAGEMENT_SESSION_INACTIVITY_MS = 30 * 60 * 1000;
+
+/** Enough to resolve delayed purchase/modal events against their original UI surface. */
+export const SURFACE_CONTEXT_HISTORY_WINDOW_MS = 5 * 60 * 1000;
+
 /** Only type processed without waiting: sets `currentScreenName` before the rest. */
 const NO_SCREEN_RESOLUTION_DELAY_TYPES: ReadonlySet<AnalyticsEventType> =
   new Set<AnalyticsEventType>(['screen_view']);

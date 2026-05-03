@@ -1,16 +1,9 @@
-import TestRenderer, { act } from 'react-test-renderer';
-import { SignalFoxProvider } from '../SignalFoxProvider';
+import { destroy, init, trackModalShown } from '../SignalFox';
 
 const mockInit = jest.fn().mockResolvedValue(undefined);
 const mockStartSession = jest.fn();
 const mockStartFlushTimer = jest.fn();
 const mockDestroy = jest.fn();
-const mockTrack = jest.fn();
-const mockTrackStep = jest.fn();
-const mockTrackSubview = jest.fn();
-const mockTrackEvent = jest.fn();
-const mockSendEvent = jest.fn();
-
 const mockSetupCalls: string[] = [];
 
 jest.mock('../../core/AnalyticsCore', () => ({
@@ -19,11 +12,11 @@ jest.mock('../../core/AnalyticsCore', () => ({
     startSession: mockStartSession,
     startFlushTimer: mockStartFlushTimer,
     destroy: mockDestroy,
-    track: mockTrack,
-    trackStep: mockTrackStep,
-    trackSubview: mockTrackSubview,
-    trackEvent: mockTrackEvent,
-    sendEvent: mockSendEvent,
+    track: jest.fn(),
+    trackFunnelStep: jest.fn(),
+    trackSubview: jest.fn(),
+    trackEvent: jest.fn(),
+    sendEvent: jest.fn(),
   })),
 }));
 
@@ -57,38 +50,39 @@ jest.mock('../../integrations/reactNativeTouchablePatch', () => ({
   })),
 }));
 
-describe('SignalFoxProvider internal integrations', () => {
+const mockTrackModalShownBridge = jest.fn();
+
+jest.mock('../../purchase/purchaseAnalyticsBridge', () => ({
+  trackModalShown: (...args: unknown[]) => mockTrackModalShownBridge(...args),
+}));
+
+describe('SignalFox.init (imperative)', () => {
   beforeEach(() => {
+    destroy();
     mockInit.mockClear();
     mockStartSession.mockClear();
     mockStartFlushTimer.mockClear();
     mockDestroy.mockClear();
-    mockTrack.mockClear();
-    mockTrackStep.mockClear();
-    mockTrackSubview.mockClear();
-    mockTrackEvent.mockClear();
-    mockSendEvent.mockClear();
+    mockTrackModalShownBridge.mockClear();
     mockSetupCalls.length = 0;
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('always registers internal integrations alongside user integrations', async () => {
+  afterEach(() => {
+    destroy();
+    jest.restoreAllMocks();
+  });
+
+  it('registers internal integrations alongside user integrations', async () => {
     const customSetup = jest.fn(() => jest.fn());
     const customIntegration = {
       name: 'customIntegration',
       setup: customSetup,
     };
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <SignalFoxProvider
-          apiKey="ak_dev__test"
-          integrations={[customIntegration]}
-        >
-          <></>
-        </SignalFoxProvider>
-      );
-      await Promise.resolve();
+    await init({
+      apiKey: 'ak_dev__test',
+      integrations: [customIntegration],
     });
 
     expect(mockSetupCalls).toEqual([
@@ -97,10 +91,6 @@ describe('SignalFoxProvider internal integrations', () => {
       'reactNativeTouchablePatch',
     ]);
     expect(customSetup).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      renderer!.unmount();
-    });
   });
 
   it('deduplicates internal integrations if they are passed explicitly', async () => {
@@ -117,17 +107,9 @@ describe('SignalFoxProvider internal integrations', () => {
       setup: jest.fn(() => jest.fn()),
     };
 
-    let renderer: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(
-        <SignalFoxProvider
-          apiKey="ak_dev__test"
-          integrations={[duplicateAppState, duplicateModal, duplicateTouchable]}
-        >
-          <></>
-        </SignalFoxProvider>
-      );
-      await Promise.resolve();
+    await init({
+      apiKey: 'ak_dev__test',
+      integrations: [duplicateAppState, duplicateModal, duplicateTouchable],
     });
 
     expect(mockSetupCalls).toEqual([
@@ -138,9 +120,43 @@ describe('SignalFoxProvider internal integrations', () => {
     expect(duplicateAppState.setup).not.toHaveBeenCalled();
     expect(duplicateModal.setup).not.toHaveBeenCalled();
     expect(duplicateTouchable.setup).not.toHaveBeenCalled();
+  });
 
-    await act(async () => {
-      renderer!.unmount();
+  it('forwards trackModalShown to the purchase bridge', async () => {
+    await init({ apiKey: 'ak_dev__test' });
+
+    trackModalShown({
+      signalFoxNodeId: 'export-sheet',
+      visible: true,
     });
+
+    expect(mockTrackModalShownBridge).toHaveBeenCalledWith({
+      signalFoxNodeId: 'export-sheet',
+      visible: true,
+    });
+  });
+
+  it('does not run setup twice for the same configuration', async () => {
+    await init({ apiKey: 'ak_dev__test', logOnly: true });
+    await init({ apiKey: 'ak_dev__test', logOnly: true });
+
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes concurrent init with the same configuration', async () => {
+    const a = init({ apiKey: 'ak_dev__same', logOnly: false });
+    const b = init({ apiKey: 'ak_dev__same', logOnly: false });
+    await Promise.all([a, b]);
+
+    expect(mockInit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a second init with a different configuration', async () => {
+    await init({ apiKey: 'ak_dev__first' });
+    await init({ apiKey: 'ak_dev__second' });
+
+    expect(console.warn).toHaveBeenCalled();
+    expect(mockInit).toHaveBeenCalledTimes(1);
   });
 });

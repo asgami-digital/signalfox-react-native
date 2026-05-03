@@ -44,8 +44,15 @@ function inferModalDisplayNameFromProps(props: ModalPropsLike): string | null {
     : null;
 }
 
+function isModalVisible(props: ModalPropsLike): boolean {
+  // In many apps the modal is shown via conditional rendering and `visible`
+  // is omitted, so treat only an explicit `false` as hidden.
+  return props.visible !== false;
+}
+
 function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   const prevVisibleRef = useRef<boolean | undefined>(undefined);
+  const currentVisibleRef = useRef<boolean>(false);
   const openEmittedRef = useRef<boolean>(false);
   const closeEmittedRef = useRef<boolean>(false);
   const latestTargetIdRef = useRef<string | null>(null);
@@ -112,11 +119,12 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
   };
 
   useLayoutEffect(() => {
-    const visible = props.visible === true;
+    const visible = isModalVisible(props);
     const targetId = inferModalTargetFromProps(props);
     const targetName = inferModalDisplayNameFromProps(props);
     latestTargetIdRef.current = targetId;
     latestTargetDisplayNameRef.current = targetName;
+    currentVisibleRef.current = visible;
     const prev = prevVisibleRef.current;
     const isFirstRender = prev === undefined;
 
@@ -141,7 +149,7 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
 
   useEffect(() => {
     return () => {
-      const wasVisible = prevVisibleRef.current === true;
+      const wasVisible = currentVisibleRef.current === true;
       if (!wasVisible) return;
       const targetId = latestTargetIdRef.current;
       const targetName = latestTargetDisplayNameRef.current;

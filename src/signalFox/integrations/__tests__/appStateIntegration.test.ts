@@ -53,4 +53,36 @@ describe('appStateIntegration bootstrap lifecycle', () => {
     expect(trackEvent).toHaveBeenNthCalledWith(1, { type: 'app_open' });
     expect(trackEvent).toHaveBeenNthCalledWith(2, { type: 'session_start' });
   });
+
+  it('renueva engagement session antes de app_foreground tras 30 minutos en background', () => {
+    const nowSpy = jest.spyOn(Date, 'now');
+    nowSpy.mockReturnValueOnce(1_000);
+    nowSpy.mockReturnValueOnce(1_000 + 30 * 60 * 1000);
+
+    const trackEvent = jest.fn();
+    const renewEngagementSession = jest.fn();
+    const flush = jest.fn(() => Promise.resolve());
+    const integration = appStateIntegration();
+
+    integration.setup(
+      { trackEvent, renewEngagementSession, flush } as any,
+      {} as any
+    );
+    trackEvent.mockClear();
+
+    mockAppStateChangeListener?.('background');
+    mockAppStateChangeListener?.('active');
+
+    expect(renewEngagementSession).toHaveBeenCalledTimes(1);
+    const renewCallOrder =
+      renewEngagementSession.mock.invocationCallOrder[0] ?? 0;
+    const foregroundCallOrder = trackEvent.mock.invocationCallOrder[2] ?? 0;
+    expect(renewCallOrder).toBeLessThan(foregroundCallOrder);
+    expect(trackEvent).toHaveBeenNthCalledWith(1, { type: 'app_background' });
+    expect(trackEvent).toHaveBeenNthCalledWith(2, { type: 'session_end' });
+    expect(trackEvent).toHaveBeenNthCalledWith(3, { type: 'app_foreground' });
+    expect(trackEvent).toHaveBeenNthCalledWith(4, { type: 'session_start' });
+
+    nowSpy.mockRestore();
+  });
 });

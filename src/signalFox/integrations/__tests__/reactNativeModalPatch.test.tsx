@@ -99,6 +99,45 @@ describe('reactNativeModalPatch', () => {
     cleanup();
   });
 
+  it('emite modal_close al desmontarse si seguia visible por renderizado condicional', () => {
+    const { Modal, cleanup, trackEvent } = setupPatchedModal();
+    let tree!: ReactTestRenderer;
+
+    act(() => {
+      tree = create(<Modal signalFoxId="conditional-modal" />);
+    });
+
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxId: 'conditional-modal',
+        payload: expect.objectContaining({
+          parent_modal: null,
+        }),
+      })
+    );
+    expect(getActiveModalId()).toBe('conditional-modal');
+
+    act(() => {
+      tree.unmount();
+    });
+
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: 'modal_close',
+        signalFoxId: 'conditional-modal',
+        payload: expect.objectContaining({
+          parent_modal: null,
+        }),
+      })
+    );
+    expect(getActiveModalId()).toBeNull();
+
+    cleanup();
+  });
+
   it('no emite eventos si el modal nunca estuvo visible', () => {
     const { Modal, cleanup, trackEvent } = setupPatchedModal();
     let tree!: ReactTestRenderer;

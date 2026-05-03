@@ -5,7 +5,7 @@ export type {
   ComponentPressEvent,
   ComponentPressPayload,
   CustomEvent,
-  FlowStepParams,
+  FunnelStepParams,
   FlowStepViewEvent,
   SubviewParams,
   SubviewViewEvent,
@@ -16,5 +16,5 @@ export type {
 export type {
   AnalyticsIntegration,
   AnalyticsIntegrationSetupContext,
-  IAnalyticsCore,
+  SignalFoxIntegrationCore,
 } from './integration';

@@ -93,7 +93,7 @@ function createCoreMock() {
     flush: jest.fn(),
     trackEvent: jest.fn(),
     track: jest.fn(),
-    trackStep: jest.fn(),
+    trackFunnelStep: jest.fn(),
     trackSubview: jest.fn(),
     markNavigationIntentPending: jest.fn(),
     clearNavigationIntentPending: jest.fn(),
@@ -212,6 +212,79 @@ describe('reactNavigationIntegration', () => {
     expect(getModalStackSnapshot()).toEqual([]);
 
     cleanup();
+  });
+
+  it('keeps tracking transitions when navigationRef.current is mounted after setup', () => {
+    jest.useFakeTimers();
+
+    const listeners: ListenerMap = {};
+    const stateRef = {
+      current: {
+        type: 'stack',
+        index: 0,
+        routes: [{ name: 'Home', key: 'home-key' }],
+      } as unknown,
+    };
+    const optionsRef = { current: undefined as unknown };
+    const addListener = (
+      eventName: string,
+      listener: (event?: unknown) => void
+    ) => {
+      listeners[eventName] ??= [];
+      listeners[eventName].push(listener);
+      return () => {
+        listeners[eventName] = (listeners[eventName] ?? []).filter(
+          (candidate) => candidate !== listener
+        );
+      };
+    };
+    const emit = (eventName: string, event?: unknown) => {
+      for (const listener of listeners[eventName] ?? []) {
+        listener(event);
+      }
+    };
+
+    const navigationRef: NavigationRefLike = {
+      current: null,
+    };
+    const core = createCoreMock();
+    const cleanup = reactNavigationIntegration({ navigationRef }).setup(
+      core as any
+    );
+
+    navigationRef.current = {
+      getRootState: () => stateRef.current,
+      isReady: () => true,
+      getCurrentOptions: () => optionsRef.current,
+      addListener,
+    } as NavigationHarness['navigationRef']['current'];
+
+    jest.advanceTimersByTime(400);
+    expect(getEventsByType(core.trackEvent, 'screen_view')).toHaveLength(1);
+
+    stateRef.current = {
+      type: 'stack',
+      index: 1,
+      routes: [
+        { name: 'Home', key: 'home-key' },
+        { name: 'Profile', key: 'profile-key' },
+      ],
+    };
+    emit('state');
+
+    const screenViews = getEventsByType(core.trackEvent, 'screen_view');
+    expect(screenViews).toHaveLength(2);
+    expect(screenViews[1]).toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          screen_name: 'Profile',
+          previous_screen_name: 'Home',
+        }),
+      })
+    );
+
+    cleanup();
+    jest.useRealTimers();
   });
 
   it('coexists with a native modal underneath and preserves the real parent_modal', () => {

@@ -1,6 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Text, View, StyleSheet } from 'react-native';
-import { multiply } from '@asgami-digital/signalfox-react-native';
 import { ActionButton } from '../components/ActionButton';
 import { DemoScreen } from '../components/DemoScreen';
 import { InfoCard } from '../components/InfoCard';
@@ -11,8 +10,6 @@ import { logDemoEvent } from '../utils/logger';
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export function HomeScreen({ navigation }: Props) {
-  const result = multiply(6, 7);
-
   return (
     <DemoScreen
       title="RN RevenueCat"
@@ -24,7 +21,7 @@ export function HomeScreen({ navigation }: Props) {
           hasSignalFoxApiKey() ? 'configured' : 'pending'
         }\nRevenueCat API key: ${
           hasRevenueCatApiKey() ? 'configured' : 'pending'
-        }\nSDK multiply(): ${result}`}
+        }`}
       />
 
       <View style={styles.group}>

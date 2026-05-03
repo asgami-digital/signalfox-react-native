@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
 import type { IAnalyticsCore } from '../types/integration';
 import type { AnalyticsEventType } from '../types/events';
+import {
+  isModalInStack,
+  modalStackPop,
+  modalStackPush,
+} from '../core/modalStack';
 import { normalizeNativePurchaseEventToAnalyticsEvent } from './normalizeNativePurchaseEvent';
 import type {
   NativePurchaseEventPayload,
@@ -15,6 +20,19 @@ const COMPLETION_DEDUPE_WINDOW_MS = 10000;
 
 /** Last SKU notified through `notifyPurchaseStarted` (for example, Android cancel without productId). */
 let pendingPurchaseProductId: string | null = null;
+
+export interface TrackModalShownParams {
+  visible: boolean;
+  signalFoxNodeId: string;
+  signalFoxNodeDisplayName?: string;
+}
+
+function isSignalFoxDebugEnabled(): boolean {
+  return (
+    (globalThis as { __SIGNALFOX_DEBUG__?: boolean }).__SIGNALFOX_DEBUG__ ===
+    true
+  );
+}
 
 function defaultStoreForPlatform(): PurchaseStore {
   return Platform.OS === 'ios' ? 'app_store' : 'google_play';
@@ -54,26 +72,13 @@ function attachPendingProductIdToJsPayload<
 }
 
 function debugLog(...args: unknown[]): void {
+  if (!isSignalFoxDebugEnabled()) return;
   console.log('[SignalfoxPurchaseAnalyticsBridge]', ...args);
 }
 
 function debugWarn(...args: unknown[]): void {
+  if (!isSignalFoxDebugEnabled()) return;
   console.warn('[SignalfoxPurchaseAnalyticsBridge]', ...args);
-}
-
-function enrichPayloadWithPendingProductId(
-  payload: NativePurchaseEventPayload
-): void {
-  const needsId =
-    (payload.eventName === 'purchase_cancelled' ||
-      payload.eventName === 'purchase_failed') &&
-    !payload.productId;
-  if (needsId && pendingPurchaseProductId) {
-    (payload as { productId?: string }).productId = pendingPurchaseProductId;
-    debugLog('JS: attached pending productId to native cancel/fail payload', {
-      productId: pendingPurchaseProductId,
-    });
-  }
 }
 
 function makeDedupeKey(payload: NativePurchaseEventPayload): string {
@@ -108,7 +113,7 @@ function shouldDedupe(
   const now = Date.now();
   const prev = lastEventSeenAtMs.get(key);
   if (typeof prev === 'number' && now - prev < dedupeWindowMs) {
-    debugWarn('Dedupe: dropping duplicate native purchase event', { key });
+    debugWarn('Dedupe: dropping duplicate purchase event', { key });
     return true;
   }
 
@@ -133,7 +138,7 @@ function toCoreTrackEvent(
 
 /**
  * Registers the `AnalyticsCore` so `notifyPurchase*` and hooks (for example, RevenueCat) can send events.
- * Independent from the optional native channel (`nativePurchaseEventBridge`).
+ * Independent from any concrete purchase integration.
  */
 export function registerPurchaseAnalyticsCore(core: IAnalyticsCore): void {
   if (bridgeRefCount === 0) {
@@ -151,57 +156,14 @@ export function unregisterPurchaseAnalyticsCore(): void {
   pendingPurchaseProductId = null;
 }
 
-/** Used by the native channel listener (separate module). */
-export function ingestNativePurchaseChannelPayload(
-  payload: NativePurchaseEventPayload
-): void {
-  if (!activeCore) {
-    debugWarn(
-      'stuck: activeCore is null — trackEvent will not run (listener started before core?)'
-    );
-    return;
-  }
-
-  enrichPayloadWithPendingProductId(payload);
-
-  if (shouldDedupe(payload)) {
-    debugLog('dedupe: skipped duplicate native purchase payload', {
-      eventName: payload.eventName,
-      productId: payload.productId,
-    });
-    return;
-  }
-
-  const normalized = normalizeNativePurchaseEventToAnalyticsEvent(payload);
-  if (!normalized) {
-    debugWarn('stuck: normalization returned null', payload);
-    return;
-  }
-  const coreEvent = toCoreTrackEvent(normalized);
-  if (!coreEvent) {
-    debugWarn('stuck: toCoreTrackEvent returned null', normalized);
-    return;
-  }
-  debugLog('JS → core: calling trackEvent', { type: coreEvent.type });
-  activeCore.trackEvent(coreEvent as any);
-  debugLog('JS → core: trackEvent returned', { type: coreEvent.type });
-
-  const done = payload.eventName;
-  if (
-    done === 'purchase_completed' ||
-    done === 'purchase_cancelled' ||
-    done === 'purchase_failed'
-  ) {
-    clearPendingPurchaseProductId(done);
-  }
-}
-
 export function notifyPurchaseStarted(
-  payload: Omit<NativePurchaseEventPayload, 'eventName'> & {
+  payload?: Omit<NativePurchaseEventPayload, 'eventName'> & {
     timestamp?: number;
   }
 ): void {
-  setPendingPurchaseProductId((payload as { productId?: string }).productId);
+  setPendingPurchaseProductId(
+    (payload as { productId?: string } | undefined)?.productId
+  );
 
   if (!activeCore) {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -216,14 +178,14 @@ export function notifyPurchaseStarted(
     ...(payload as any),
     eventName: 'purchase_started',
     platform:
-      (payload as any).platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
-    store: (payload as any).store ?? defaultStoreForPlatform(),
+      (payload as any)?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: (payload as any)?.store ?? defaultStoreForPlatform(),
   });
   const coreEvent = toCoreTrackEvent(normalized);
   if (!coreEvent) return;
   activeCore.trackEvent({
     ...coreEvent,
-    ...(typeof payload.timestamp === 'number' &&
+    ...(typeof payload?.timestamp === 'number' &&
     Number.isFinite(payload.timestamp) &&
     payload.timestamp > 0
       ? { timestamp: payload.timestamp }
@@ -282,11 +244,17 @@ export function notifyPurchaseCompleted(
 ): void {
   if (!activeCore) return;
 
+  const payloadWithPendingProductId = attachPendingProductIdToJsPayload(
+    payload as Record<string, unknown> | undefined
+  ) as Omit<NativePurchaseEventPayload, 'eventName'> | undefined;
+
   const completedPayload = {
-    ...(payload as any),
+    ...(payloadWithPendingProductId as any),
     eventName: 'purchase_completed',
-    platform: payload?.platform ?? (Platform.OS === 'ios' ? 'ios' : 'android'),
-    store: payload?.store ?? defaultStoreForPlatform(),
+    platform:
+      payloadWithPendingProductId?.platform ??
+      (Platform.OS === 'ios' ? 'ios' : 'android'),
+    store: payloadWithPendingProductId?.store ?? defaultStoreForPlatform(),
   } as NativePurchaseEventPayload;
   if (shouldDedupe(completedPayload, COMPLETION_DEDUPE_WINDOW_MS)) {
     debugLog('dedupe: skipped duplicate JS purchase payload', {
@@ -329,57 +297,99 @@ export function notifyRestoreCompleted(
 }
 
 export function notifyModalOpened(
-  targetId: string,
+  signalFoxNodeId: string,
   payloadExtras?: Record<string, unknown>,
   timestamp?: number
 ): void {
-  if (!activeCore) return;
-
-  const trimmedTargetId = typeof targetId === 'string' ? targetId.trim() : '';
-  if (!trimmedTargetId) return;
-
-  activeCore.trackEvent({
-    type: 'modal_open',
-    ...(typeof timestamp === 'number' &&
-    Number.isFinite(timestamp) &&
-    timestamp > 0
-      ? { timestamp }
-      : {}),
-    signalFoxDisplayName: trimmedTargetId,
-    target_type: 'modal',
-    payload: {
-      modalName: trimmedTargetId,
-      source: 'react_native_modal',
-      kind: 'component_modal',
-      ...(payloadExtras ?? {}),
-    },
-  } as any);
+  trackModalVisibilityChange({
+    targetId: signalFoxNodeId,
+    payloadExtras,
+    timestamp,
+    visible: true,
+    ignoreCloseIfMissing: false,
+  });
 }
 
 export function notifyModalClosed(
-  targetId: string,
+  signalFoxNodeId: string,
   payloadExtras?: Record<string, unknown>,
   timestamp?: number
 ): void {
+  trackModalVisibilityChange({
+    targetId: signalFoxNodeId,
+    payloadExtras,
+    timestamp,
+    visible: false,
+    ignoreCloseIfMissing: false,
+  });
+}
+
+export function trackModalShown(params: TrackModalShownParams): void {
+  trackModalVisibilityChange({
+    targetId: params.signalFoxNodeId,
+    displayName: params.signalFoxNodeDisplayName,
+    visible: params.visible,
+    ignoreCloseIfMissing: true,
+  });
+}
+
+function trimmedNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function trackModalVisibilityChange({
+  targetId,
+  displayName,
+  payloadExtras,
+  timestamp,
+  visible,
+  ignoreCloseIfMissing,
+}: {
+  targetId: unknown;
+  displayName?: unknown;
+  payloadExtras?: Record<string, unknown>;
+  timestamp?: number;
+  visible: boolean;
+  ignoreCloseIfMissing: boolean;
+}): void {
   if (!activeCore) return;
 
-  const trimmedTargetId = typeof targetId === 'string' ? targetId.trim() : '';
+  const trimmedTargetId = trimmedNonEmptyString(targetId);
   if (!trimmedTargetId) return;
 
+  const trimmedDisplayName = trimmedNonEmptyString(displayName);
+  if (visible && isModalInStack(trimmedTargetId)) {
+    return;
+  }
+  if (!visible && ignoreCloseIfMissing && !isModalInStack(trimmedTargetId)) {
+    return;
+  }
+
+  const parentModal = visible
+    ? modalStackPush({
+        id: trimmedTargetId,
+        source: 'react_native_modal',
+      })
+    : modalStackPop(trimmedTargetId);
+
   activeCore.trackEvent({
-    type: 'modal_close',
+    type: visible ? 'modal_open' : 'modal_close',
     ...(typeof timestamp === 'number' &&
     Number.isFinite(timestamp) &&
     timestamp > 0
       ? { timestamp }
       : {}),
-    signalFoxDisplayName: trimmedTargetId,
+    signalFoxId: trimmedTargetId,
+    ...(trimmedDisplayName ? { signalFoxDisplayName: trimmedDisplayName } : {}),
     target_type: 'modal',
     payload: {
       modalName: trimmedTargetId,
       source: 'react_native_modal',
       kind: 'component_modal',
       ...(payloadExtras ?? {}),
+      parent_modal: parentModal,
     },
   } as any);
 }

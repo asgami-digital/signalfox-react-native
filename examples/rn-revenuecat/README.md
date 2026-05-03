@@ -50,6 +50,7 @@ Placeholders:
 
 ## Notes
 
+- SignalFox se inicializa en `src/signalFoxBootstrap.ts`, cargado desde `index.js` justo después de los parches nativos.
 - The embedded paywall uses `RevenueCatUI.Paywall`.
 - The modal flow uses `RevenueCatUI.presentPaywall()` and leaves the `presentPaywallIfNeeded()` variant ready.
 - Basic navigation, click, and purchase logs were added to the console.

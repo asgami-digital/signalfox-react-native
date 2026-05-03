@@ -18,10 +18,6 @@ class SignalfoxReactNativeModule(reactContext: ReactApplicationContext) :
     SignalfoxPurchaseAnalyticsTracker(reactContext)
   }
 
-  override fun multiply(a: Double, b: Double): Double {
-    return a * b
-  }
-
   override fun getAppVersion(promise: Promise) {
     try {
       val packageInfo = appContext.packageManager.getPackageInfo(appContext.packageName, 0)

@@ -204,10 +204,10 @@ describe('AnalyticsCore navigation intent buffer', () => {
     core.setNavigationIntentTimeoutListener(onTimeout);
 
     core.markNavigationIntentPending();
-    core.trackStep({
-      flow_name: 'onboarding',
-      id: 'welcome',
-      displayName: 'Welcome',
+    core.trackFunnelStep({
+      funnelName: 'onboarding',
+      signalFoxNodeId: 'welcome',
+      signalFoxNodeDisplayName: 'Welcome',
     });
     await core.flush();
     expect(mockedSendEvents).not.toHaveBeenCalled();

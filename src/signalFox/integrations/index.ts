@@ -7,12 +7,10 @@ export {
 } from './expoRouterIntegration';
 export {
   reactNativeIapIntegration,
-  applyReactNativeIapPatch,
   REACT_NATIVE_IAP_ANALYTICS_INTEGRATION_NAME,
 } from './reactNativeIapIntegration';
 export {
   revenueCatIntegration,
-  resolveRevenueCatPurchasesExport,
   REVENUECAT_ANALYTICS_INTEGRATION_NAME,
 } from './revenueCatIntegration';
 export type { RevenueCatIntegrationOptions } from './revenueCatIntegration';

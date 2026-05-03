@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { AnalyticsIntegration } from '../types/integration';
+import type { AnalyticsIntegration, IAnalyticsCore } from '../types/integration';
 import type { NativePurchaseEventPayload } from '../purchase/purchaseEventTypes';
 import {
   notifyPurchaseCancelled,
@@ -46,10 +46,58 @@ const RN_IAP_NITRO_SYNC_IOS_PATCH_MARKER = Symbol.for(
 const RN_IAP_NITRO_GET_AVAILABLE_PURCHASES_PATCH_MARKER = Symbol.for(
   'signalFox.reactNativeIapNitroGetAvailablePurchasesPatched'
 );
+const RN_IAP_NITRO_BUY_PROMOTED_PRODUCT_IOS_PATCH_MARKER = Symbol.for(
+  'signalFox.reactNativeIapNitroBuyPromotedProductIOSPatched'
+);
 const NITRO_RESTORE_SYNC_WINDOW_MS = 10_000;
+let hasWarnedMissingNitroInDev = false;
+
+function isSignalFoxDebugEnabled(): boolean {
+  return (
+    (globalThis as { __SIGNALFOX_DEBUG__?: boolean }).__SIGNALFOX_DEBUG__ ===
+    true
+  );
+}
 
 function debugLog(...args: unknown[]): void {
+  if (!isSignalFoxDebugEnabled()) return;
   console.log('[SignalFox][react-native-iap]', ...args);
+}
+
+function hasCompatibleLegacyApi(module: PurchaseModule): boolean {
+  return (
+    typeof module.useIAP === 'function' ||
+    typeof module.requestPurchase === 'function' ||
+    typeof module.requestPurchaseOnPromotedProductIOS === 'function'
+  );
+}
+
+function isMethodPatchable(module: PurchaseModule, key: string): boolean {
+  const descriptor = getOwnDescriptor(module, key);
+
+  if (!descriptor) return typeof module[key] === 'function';
+  if (descriptor.configurable !== false) return true;
+  if (descriptor.writable === true) return true;
+  return false;
+}
+
+function patchabilityScore(module: PurchaseModule): number {
+  let score = 0;
+
+  for (const key of [
+    'useIAP',
+    'requestPurchase',
+    'requestSubscription',
+    'requestPurchaseOnPromotedProductIOS',
+    'purchaseUpdatedListener',
+    'purchaseErrorListener',
+  ]) {
+    if (typeof module[key] === 'function' && isMethodPatchable(module, key)) {
+      score += 1;
+    }
+  }
+
+  return score;
 }
 
 function resolveReactNativeIapExport(value: unknown): PurchaseModule | null {
@@ -58,32 +106,47 @@ function resolveReactNativeIapExport(value: unknown): PurchaseModule | null {
   debugLog('resolveReactNativeIapExport: checking root export', {
     hasUseIAP: typeof root.useIAP === 'function',
     hasRequestPurchase: typeof root.requestPurchase === 'function',
+    hasRequestPurchaseOnPromotedProductIOS:
+      typeof root.requestPurchaseOnPromotedProductIOS === 'function',
     hasPurchaseUpdatedListener:
       typeof root.purchaseUpdatedListener === 'function',
     hasPurchaseErrorListener: typeof root.purchaseErrorListener === 'function',
     hasDefault: Boolean(root.default),
   });
-  if (
-    typeof root.useIAP === 'function' ||
-    typeof root.requestPurchase === 'function'
-  ) {
-    debugLog('resolveReactNativeIapExport: resolved from root export');
-    return root;
-  }
   const d = root.default;
+  const rootCompatible = hasCompatibleLegacyApi(root);
+  const rootScore = rootCompatible ? patchabilityScore(root) : -1;
+
   if (d && typeof d === 'object') {
     const mod = d as PurchaseModule;
+    const defaultCompatible = hasCompatibleLegacyApi(mod);
+    const defaultScore = defaultCompatible ? patchabilityScore(mod) : -1;
     debugLog('resolveReactNativeIapExport: checking default export', {
       hasUseIAP: typeof mod.useIAP === 'function',
       hasRequestPurchase: typeof mod.requestPurchase === 'function',
+      hasRequestPurchaseOnPromotedProductIOS:
+        typeof mod.requestPurchaseOnPromotedProductIOS === 'function',
       hasPurchaseUpdatedListener:
         typeof mod.purchaseUpdatedListener === 'function',
       hasPurchaseErrorListener: typeof mod.purchaseErrorListener === 'function',
+      patchabilityScore: defaultScore,
     });
-    if (
-      typeof mod.useIAP === 'function' ||
-      typeof mod.requestPurchase === 'function'
-    ) {
+    if (defaultCompatible && defaultScore > rootScore) {
+      debugLog(
+        'resolveReactNativeIapExport: resolved from default export (better patchability)'
+      );
+      return mod;
+    }
+  }
+  if (rootCompatible) {
+    debugLog('resolveReactNativeIapExport: resolved from root export', {
+      patchabilityScore: rootScore,
+    });
+    return root;
+  }
+  if (d && typeof d === 'object') {
+    const mod = d as PurchaseModule;
+    if (hasCompatibleLegacyApi(mod)) {
       debugLog('resolveReactNativeIapExport: resolved from default export');
       return mod;
     }
@@ -187,9 +250,11 @@ function loadNitroModulesRuntime(): PurchaseModule | null {
 
 function warnMissingNitroInDev(): void {
   if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+  if (hasWarnedMissingNitroInDev) return;
   if (loadNitroModulesRuntime()) return;
+  hasWarnedMissingNitroInDev = true;
   console.error(
-    '[SignalFox][react-native-iap] Nitro was not detected. Full purchase event coverage is only guaranteed on Nitro-based react-native-iap versions.'
+    '[SignalFox][react-native-iap] Nitro was not detected. In pre-Nitro react-native-iap versions, purchase starts must be tracked explicitly with notifyPurchaseStarted(). Full purchase event coverage is only guaranteed on Nitro-based react-native-iap versions.'
   );
 }
 
@@ -298,6 +363,39 @@ function patchNitroGetAvailablePurchasesIfNeeded(
   return patched;
 }
 
+function patchNitroBuyPromotedProductIOSIfNeeded(
+  hybridObject: unknown
+): boolean {
+  const target = asRecord(hybridObject);
+  if (!target) return false;
+  if ((target as any)[RN_IAP_NITRO_BUY_PROMOTED_PRODUCT_IOS_PATCH_MARKER]) {
+    return true;
+  }
+  if (typeof target.buyPromotedProductIOS !== 'function') return false;
+
+  const patched = definePatchedExport(
+    target,
+    'buyPromotedProductIOS',
+    (original) => {
+      return async function patchedNitroBuyPromotedProductIOS(
+        this: unknown,
+        ...args: unknown[]
+      ) {
+        const startedPayload = extractStartedPayloadFromPromotedProduct();
+        debugLog('nitro buyPromotedProductIOS() patched call', startedPayload);
+        notifyPurchaseStarted(startedPayload);
+        return await original.apply(this, args);
+      };
+    }
+  );
+
+  if (patched) {
+    (target as any)[RN_IAP_NITRO_BUY_PROMOTED_PRODUCT_IOS_PATCH_MARKER] = true;
+  }
+
+  return patched;
+}
+
 function patchNitroCreateHybridObject(patch: ActivePatch): boolean {
   const nitroModules = loadNitroModulesRuntime();
   if (!nitroModules || typeof nitroModules.createHybridObject !== 'function') {
@@ -330,10 +428,13 @@ function patchNitroCreateHybridObject(patch: ActivePatch): boolean {
       const didPatchSyncIOS = patchNitroSyncIOSIfNeeded(hybridObject, patch);
       const didPatchGetAvailablePurchases =
         patchNitroGetAvailablePurchasesIfNeeded(hybridObject, patch);
+      const didPatchBuyPromotedProductIOS =
+        patchNitroBuyPromotedProductIOSIfNeeded(hybridObject);
       debugLog('patchNitroCreateHybridObject: RnIap hybrid object result', {
         didPatchHybridObject,
         didPatchSyncIOS,
         didPatchGetAvailablePurchases,
+        didPatchBuyPromotedProductIOS,
       });
     }
     return hybridObject;
@@ -460,12 +561,15 @@ function addFallbackListeners(
 function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
   let didPatchRequestPurchase = false;
   let didPatchRequestSubscription = false;
+  let didPatchRequestPurchaseOnPromotedProductIOS = false;
   let didPatchPurchaseUpdatedListener = false;
   let didPatchPurchaseErrorListener = false;
   let didPatchUseIAP = false;
   debugLog('patchOwnMethods: begin', {
     hasRequestPurchase: typeof module.requestPurchase === 'function',
     hasRequestSubscription: typeof module.requestSubscription === 'function',
+    hasRequestPurchaseOnPromotedProductIOS:
+      typeof module.requestPurchaseOnPromotedProductIOS === 'function',
     hasPurchaseUpdatedListener:
       typeof module.purchaseUpdatedListener === 'function',
     hasPurchaseErrorListener:
@@ -523,6 +627,34 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
     );
     debugLog('patchOwnMethods: requestSubscription patch result', {
       patched: didPatchRequestSubscription,
+    });
+  }
+
+  if (typeof module.requestPurchaseOnPromotedProductIOS === 'function') {
+    patch.originalDescriptors.set(
+      'requestPurchaseOnPromotedProductIOS',
+      getOwnDescriptor(module, 'requestPurchaseOnPromotedProductIOS')
+    );
+    didPatchRequestPurchaseOnPromotedProductIOS = definePatchedExport(
+      module,
+      'requestPurchaseOnPromotedProductIOS',
+      (original) => {
+        return async function patchedRequestPurchaseOnPromotedProductIOS(
+          this: unknown,
+          ...args: unknown[]
+        ) {
+          const startedPayload = extractStartedPayloadFromPromotedProduct();
+          debugLog(
+            'requestPurchaseOnPromotedProductIOS() patched call',
+            startedPayload
+          );
+          notifyPurchaseStarted(startedPayload);
+          return await original.apply(this, args);
+        };
+      }
+    );
+    debugLog('patchOwnMethods: requestPurchaseOnPromotedProductIOS result', {
+      patched: didPatchRequestPurchaseOnPromotedProductIOS,
     });
   }
 
@@ -681,6 +813,31 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
             };
         }
 
+        if (
+          hookResult &&
+          typeof hookResult.requestPurchaseOnPromotedProductIOS === 'function'
+        ) {
+          const originalHookRequestPurchaseOnPromotedProductIOS =
+            hookResult.requestPurchaseOnPromotedProductIOS;
+          hookResult.requestPurchaseOnPromotedProductIOS =
+            async function patchedHookRequestPurchaseOnPromotedProductIOS(
+              this: unknown,
+              ...args: unknown[]
+            ) {
+              const startedPayload = extractStartedPayloadFromPromotedProduct(
+                hookResult.promotedProductIOS
+              );
+              debugLog(
+                'useIAP.requestPurchaseOnPromotedProductIOS() patched call',
+                startedPayload
+              );
+              notifyPurchaseStarted(startedPayload);
+              return await (
+                originalHookRequestPurchaseOnPromotedProductIOS as Function
+              ).apply(this, args);
+            };
+        }
+
         if (hookResult && typeof hookResult.restorePurchases === 'function') {
           const originalHookRestorePurchases = hookResult.restorePurchases;
           hookResult.restorePurchases =
@@ -727,6 +884,7 @@ function patchOwnMethods(module: PurchaseModule, patch: ActivePatch): void {
   debugLog('patchOwnMethods: end', {
     didPatchRequestPurchase,
     didPatchRequestSubscription,
+    didPatchRequestPurchaseOnPromotedProductIOS,
     didPatchPurchaseUpdatedListener,
     didPatchPurchaseErrorListener,
     didPatchUseIAP,
@@ -917,6 +1075,20 @@ function extractStartedPayloadFromNitroRequest(
   };
 }
 
+function extractStartedPayloadFromPromotedProduct(
+  product?: unknown
+): Omit<NativePurchaseEventPayload, 'eventName'> {
+  const obj = asRecord(product) ?? {};
+  const productId = pickFirstString([obj.productId, obj.id, obj.sku]);
+
+  return {
+    ...(productId ? { productId } : {}),
+    productType: 'inapp',
+    store: 'app_store',
+    platform: 'ios',
+  };
+}
+
 function extractCompletedPayloadFromPurchase(
   purchase: unknown
 ): Record<string, unknown> {
@@ -1020,7 +1192,8 @@ export function reactNativeIapIntegration(
     name: REACT_NATIVE_IAP_ANALYTICS_INTEGRATION_NAME,
 
     setup(core) {
-      registerPurchaseAnalyticsCore(core);
+      const internalCore = core as IAnalyticsCore;
+      registerPurchaseAnalyticsCore(internalCore);
       warnMissingNitroInDev();
 
       if (module) {

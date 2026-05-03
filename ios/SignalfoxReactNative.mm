@@ -24,14 +24,11 @@ static NSString *SignalfoxHardwareMachineString(void) {
 static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 
 @implementation SignalfoxReactNative
-- (NSNumber *)multiply:(double)a b:(double)b {
-    NSNumber *result = @(a * b);
 
-    return result;
-}
+RCT_EXPORT_MODULE(SignalfoxReactNative)
 
-- (void)getAppVersion:(RCTPromiseResolveBlock)resolve
-              reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(getAppVersion:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   NSString *appVersion = [[[NSBundle mainBundle] infoDictionary]
     objectForKey:@"CFBundleShortVersionString"];
@@ -42,8 +39,8 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   resolve(appVersion ?: @"");
 }
 
-- (void)getAnonymousId:(RCTPromiseResolveBlock)resolve
-               reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(getAnonymousId:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSString *anonymousId = [defaults stringForKey:kSignalfoxAnonymousIdKey];
@@ -55,16 +52,16 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   resolve(anonymousId);
 }
 
-- (void)getDeviceModel:(RCTPromiseResolveBlock)resolve
-                reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(getDeviceModel:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   // hw.machine -> Apple identifier (for example, iPhone16,1), not the generic "iPhone" from UIDevice.model.
   NSString *machine = SignalfoxHardwareMachineString();
   resolve(machine ?: ([UIDevice currentDevice].model ?: @""));
 }
 
-- (void)getOsVersion:(RCTPromiseResolveBlock)resolve
-             reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(getOsVersion:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   NSString *version = [UIDevice currentDevice].systemVersion;
   resolve(version ?: @"");
@@ -72,8 +69,8 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
 
 // MARK: - Native purchase analytics bridge
 
-- (void)startNativePurchaseAnalytics:(RCTPromiseResolveBlock)resolve
-                               reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(startNativePurchaseAnalytics:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   @try {
     NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] startNativePurchaseAnalytics called");
@@ -99,8 +96,8 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   }
 }
 
-- (void)stopNativePurchaseAnalytics:(RCTPromiseResolveBlock)resolve
-                              reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(stopNativePurchaseAnalytics:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   @try {
     NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] stopNativePurchaseAnalytics called");
@@ -126,8 +123,8 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   }
 }
 
-- (void)reconcileNativePurchases:(RCTPromiseResolveBlock)resolve
-                            reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(reconcileNativePurchases:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   @try {
     NSLog(@"[SignalfoxPurchaseAnalyticsBridge][iOS-mm] reconcileNativePurchases called");
@@ -159,8 +156,8 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   }
 }
 
-- (void)beginHeuristicPaywallSession:(RCTPromiseResolveBlock)resolve
-                              reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(beginHeuristicPaywallSession:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   @try {
     Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
@@ -182,8 +179,8 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
   }
 }
 
-- (void)endHeuristicPaywallSession:(RCTPromiseResolveBlock)resolve
-                            reject:(RCTPromiseRejectBlock)reject
+RCT_EXPORT_METHOD(endHeuristicPaywallSession:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
   @try {
     Class trackerClass = NSClassFromString(@"SignalfoxPurchaseAnalyticsTracker");
@@ -209,11 +206,6 @@ static NSString *const kSignalfoxAnonymousIdKey = @"signalfox_anonymous_id";
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {
     return std::make_shared<facebook::react::NativeSignalfoxReactNativeSpecJSI>(params);
-}
-
-+ (NSString *)moduleName
-{
-  return @"SignalfoxReactNative";
 }
 
 @end

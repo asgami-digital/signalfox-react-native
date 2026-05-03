@@ -59,20 +59,9 @@ function normalizeModalStackEntry(
 }
 
 function maybeLogModalStack(action: string, modalId?: string | null): void {
-  // En RN suele existir global __DEV__. Si no existe, logueamos igualmente
-  // (we prefer debug visibility over losing information).
-  let isDev = false;
-  const globalProcess = (
-    globalThis as {
-      process?: { env?: { NODE_ENV?: string } };
-    }
-  ).process;
-  if (typeof (globalThis as any).__DEV__ === 'boolean') {
-    isDev = (globalThis as any).__DEV__;
-  } else if (typeof globalProcess?.env?.NODE_ENV === 'string') {
-    isDev = globalProcess.env.NODE_ENV !== 'production';
+  if ((globalThis as { __SIGNALFOX_DEBUG__?: boolean }).__SIGNALFOX_DEBUG__ !== true) {
+    return;
   }
-  if (!isDev) return;
 
   // Snapshot del stack para que no cambie mientras se imprime.
   const stackSnapshot = modalStack.map((entry) => ({ ...entry }));
@@ -98,6 +87,17 @@ export function getActiveModalEntry(): ModalStackEntry | null {
 
 export function getModalStackSnapshot(): ModalStackEntry[] {
   return modalStack.map((entry) => ({ ...entry }));
+}
+
+export function isModalInStack(stackKeyOrId?: string | null): boolean {
+  if (typeof stackKeyOrId !== 'string' || stackKeyOrId.length === 0) {
+    return false;
+  }
+
+  return modalStack.some(
+    (entry) =>
+      entry.stackKey === stackKeyOrId || entry.id === stackKeyOrId
+  );
 }
 
 export function modalStackPush(entry: ModalStackEntryInput): string | null {

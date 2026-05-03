@@ -28,6 +28,7 @@ export interface BaseAnalyticsEvent {
   type: AnalyticsEventType;
   timestamp: number;
   session_id: string;
+  engagement_session_id: string;
   anonymous_id: string;
   platform: 'ios' | 'android';
   app_version?: string;
@@ -81,18 +82,17 @@ export interface ComponentPressEvent extends BaseAnalyticsEvent {
   payload: ComponentPressPayload;
 }
 
-export type FlowStepParams = {
-  flow_name: string;
-  id: string;
-  displayName?: string;
-  step_index?: number;
-  /** If omitted, the core's current screen is used (it may be null on the first render). */
-  screen_name?: string;
+/** Parámetros públicos para `trackFunnelStep` (el evento enviado sigue usando `flow_name` / `flow_step_view` en red). */
+export type FunnelStepParams = {
+  funnelName: string;
+  signalFoxNodeId: string;
+  signalFoxNodeDisplayName?: string;
+  stepIndex?: number;
 };
 
 export type SubviewParams = {
-  id: string;
-  displayName?: string;
+  signalFoxNodeId: string;
+  signalFoxNodeDisplayName?: string;
 };
 
 export interface SubviewViewEvent extends BaseAnalyticsEvent {

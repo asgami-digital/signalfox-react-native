@@ -1,26 +1,13 @@
 import type {
   AnalyticsEventType,
-  FlowStepParams,
+  FunnelStepParams,
   SubviewParams,
 } from './events';
 
-/**
- * Minimal interface exposed by the core to integrations.
- */
-export interface IAnalyticsCore {
+export interface SignalFoxIntegrationCore {
   /** Flushes the queue and sends pending events to the backend. */
   flush(): Promise<void>;
-  /** Automatic events (lifecycle, navigation, RN patches, purchases). */
-  trackEvent(
-    event: { type: AnalyticsEventType } & Record<string, unknown>
-  ): void;
-  /**
-   * Evento custom libre (event_name=custom, custom_event_name en properties_json).
-   */
-  track(name: string, properties?: Record<string, unknown>): void;
-  /** @deprecated usar track() */
-  sendEvent?(name: string, properties: Record<string, unknown>): void;
-  trackStep(params: FlowStepParams): void;
+  trackFunnelStep(params: FunnelStepParams): void;
   trackSubview(params: SubviewParams): void;
 
   /**
@@ -32,9 +19,22 @@ export interface IAnalyticsCore {
   clearNavigationIntentPending?(): void;
   /** Llamado solo al vencer el timeout del buffer; p. ej. para limpiar `pendingNavigationTimestamp` local. */
   setNavigationIntentTimeoutListener?(listener: (() => void) | null): void;
+
+  /** Starts a new engagement session while keeping the app-cycle session id. */
+  renewEngagementSession?(): void;
 }
 
-/** Contexto opcional pasado por `SignalFoxProvider` al montar integraciones. */
+/**
+ * Minimal internal interface used by built-in integrations.
+ */
+export interface IAnalyticsCore extends SignalFoxIntegrationCore {
+  /** Automatic events (lifecycle, navigation, RN patches, purchases). */
+  trackEvent(
+    event: { type: AnalyticsEventType } & Record<string, unknown>
+  ): void;
+}
+
+/** Contexto opcional pasado por `SignalFox.init()` al montar integraciones. */
 export interface AnalyticsIntegrationSetupContext {
   allIntegrations: ReadonlyArray<AnalyticsIntegration>;
 }
@@ -42,7 +42,7 @@ export interface AnalyticsIntegrationSetupContext {
 export interface AnalyticsIntegration {
   name: string;
   setup(
-    core: IAnalyticsCore,
+    core: SignalFoxIntegrationCore,
     context?: AnalyticsIntegrationSetupContext
   ): () => void;
 }

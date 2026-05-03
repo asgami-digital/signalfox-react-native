@@ -144,6 +144,34 @@ describe('AnalyticsCore purchase flow timestamps', () => {
     expect(isoToMs(cancelled!.event_timestamp)).toBe(tDone);
   });
 
+  it('drops purchase terminal events that do not match any purchase_started flow', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: 1_700_000_000_000,
+      payload: { screen_name: 'Pricing' },
+    } as any);
+    core.trackEvent({
+      type: 'purchase_completed',
+      timestamp: 1_700_000_000_100,
+      payload: { productId: 'pro_monthly' },
+    } as any);
+
+    await core.flush();
+
+    const batch = mockedSendEvents.mock.calls[0]![0];
+    const events = batch.events as Array<{
+      event_name?: string;
+    }>;
+
+    expect(events.map((event) => event.event_name)).toEqual(['screen_view']);
+  });
+
   it('purchase_completed y purchase_failed comparten screen_name y parent_modal del purchase_started', async () => {
     const core = new AnalyticsCore({
       apiKey: 'ak_prod_test',
@@ -265,5 +293,77 @@ describe('AnalyticsCore purchase flow timestamps', () => {
     }>;
     const completed = events.find((e) => e.event_name === 'purchase_completed');
     expect(completed?.screen_name).toBe('Pricing');
+  });
+
+  it('resolves delayed purchase_started against the original timestamp surface', async () => {
+    const core = new AnalyticsCore({
+      apiKey: 'ak_prod_test',
+      batchSize: 10,
+    });
+    core.startSession();
+
+    const t0 = 1_700_000_000_000;
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: t0,
+      payload: { screen_name: 'PaywallHost' },
+    } as any);
+    core.trackEvent({
+      type: 'screen_view',
+      timestamp: t0 + 200,
+      payload: { screen_name: 'HomeAfterDismiss' },
+    } as any);
+
+    modalStackPush('RevenueCat Paywall');
+    core.trackEvent({
+      type: 'modal_open',
+      timestamp: t0 + 50,
+      signalFoxDisplayName: 'RevenueCat Paywall',
+      target_type: 'modal',
+      payload: {
+        modalName: 'RevenueCat Paywall',
+        source: 'react_native_modal',
+        kind: 'component_modal',
+      },
+    } as any);
+
+    core.trackEvent({
+      type: 'purchase_started',
+      timestamp: t0 + 100,
+      payload: { productId: 'pro_monthly' },
+    } as any);
+
+    resetModalStack();
+    core.trackEvent({
+      type: 'purchase_completed',
+      timestamp: t0 + 300,
+      payload: { productId: 'pro_monthly' },
+    } as any);
+    core.trackEvent({
+      type: 'custom',
+      custom_event_name: 'after_purchase',
+      timestamp: t0 + 350,
+      payload: {},
+    } as any);
+
+    await core.flush();
+
+    const batch = mockedSendEvents.mock.calls[0]![0];
+    const events = batch.events as Array<{
+      event_name?: string;
+      screen_name?: string | null;
+      parent_modal?: string | null;
+    }>;
+    const modalOpen = events.find((e) => e.event_name === 'modal_open');
+    const started = events.find((e) => e.event_name === 'purchase_started');
+    const completed = events.find((e) => e.event_name === 'purchase_completed');
+    const afterPurchase = events.find((e) => e.event_name === 'custom');
+
+    expect(modalOpen?.screen_name).toBe('PaywallHost');
+    expect(started?.screen_name).toBe('PaywallHost');
+    expect(started?.parent_modal).toBe('RevenueCat Paywall');
+    expect(completed?.screen_name).toBe('PaywallHost');
+    expect(completed?.parent_modal).toBe('RevenueCat Paywall');
+    expect(afterPurchase?.screen_name).toBe('HomeAfterDismiss');
   });
 });

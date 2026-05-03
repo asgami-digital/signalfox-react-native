@@ -2,7 +2,7 @@
 
 SignalFox for React Native is the official client library for instrumenting your app with SignalFox.
 
-It helps you track app lifecycle, native modals, native touchables, navigation, and purchase flows with a simple provider-based setup. It also lets you assign stable `signalFoxId` values to the UI elements that matter most, so SignalFox can build a consistent understanding of your app structure over time.
+It helps you track app lifecycle, native modals, native touchables, navigation, and purchase flows with a single imperative `SignalFox.init()` at startup. It also lets you assign stable `signalFoxId` values to the UI elements that matter most, so SignalFox can build a consistent understanding of your app structure over time.
 
 ## Links
 
@@ -14,7 +14,7 @@ It helps you track app lifecycle, native modals, native touchables, navigation, 
 
 Use this library when you want to:
 
-- initialize SignalFox once at the app root
+- initialize SignalFox once (for example at app bootstrap or in a root `useEffect`)
 - connect your app using your SignalFox API key
 - automatically track app lifecycle events
 - enable tracking for native modals and native touchables at startup
@@ -53,11 +53,11 @@ cd ios && pod install
 The basic setup has two steps:
 
 1. apply the startup patches as early as possible
-2. wrap your app with `SignalFoxProvider`
+2. call `SignalFox.init({ apiKey, integrations })` once your app boots
 
 ### 1. Apply Startup Patches
 
-Call these patch initializers before your app renders.
+Call these patch initializers before your app renders, and before importing code that renders React Native `Modal`, `Pressable`, or touchable components.
 
 They enable tracking for native modals and native touchables.
 
@@ -71,29 +71,35 @@ applyModalPatch();
 applyTouchablePatch();
 ```
 
-A common place for this is your app entry file, such as `index.js`, or a bootstrap module imported from it.
+A common place for this is your app entry file, such as `index.js`, using `require()` before loading your app module so the patches run first.
 
-### 2. Wrap Your App with `SignalFoxProvider`
+### 2. Initialize SignalFox
 
-Wrap your application with `SignalFoxProvider` and pass your SignalFox API key.
+Call `SignalFox.init()` after patches are applied. It returns a `Promise` (you can `void` it from an effect or await it during bootstrap).
 
 ```tsx
-import React from 'react';
-import { SignalFoxProvider } from '@asgami-digital/signalfox-react-native';
+import { useEffect } from 'react';
+import { SignalFox } from '@asgami-digital/signalfox-react-native';
 import App from './src/App';
 
 export default function Root() {
-  return (
-    <SignalFoxProvider apiKey="YOUR_SIGNALFOX_API_KEY">
-      <App />
-    </SignalFoxProvider>
-  );
+  useEffect(() => {
+    void SignalFox.init({ apiKey: 'YOUR_SIGNALFOX_API_KEY' });
+  }, []);
+
+  return <App />;
 }
 ```
 
-## Provider Configuration
+You can also start initialization from your entry file (after patches), without React:
 
-`SignalFoxProvider` accepts the following main props:
+```ts
+void SignalFox.init({ apiKey: 'YOUR_SIGNALFOX_API_KEY' });
+```
+
+## Initialization options
+
+`SignalFox.init` accepts:
 
 - `apiKey`: your SignalFox API key
 - `logOnly`: optional boolean for local or debug-only usage
@@ -101,40 +107,43 @@ export default function Root() {
 
 Basic example:
 
-```tsx
-<SignalFoxProvider apiKey="YOUR_SIGNALFOX_API_KEY">
-  <App />
-</SignalFoxProvider>
+```ts
+await SignalFox.init({ apiKey: 'YOUR_SIGNALFOX_API_KEY' });
 ```
 
 Example with optional integrations:
 
 ```tsx
+import { useEffect } from 'react';
 import Purchases from 'react-native-purchases';
 import RevenueCatUI from 'react-native-purchases-ui';
 import { navigationRef } from './navigation';
 
 import {
-  SignalFoxProvider,
+  SignalFox,
   reactNavigationIntegration,
   revenueCatIntegration,
 } from '@asgami-digital/signalfox-react-native';
 
-<SignalFoxProvider
-  apiKey="YOUR_SIGNALFOX_API_KEY"
-  integrations={[
-    reactNavigationIntegration({ navigationRef }),
-    revenueCatIntegration({
-      purchases: Purchases,
-      revenueCatUI: RevenueCatUI,
-    }),
-  ]}
->
-  <App />
-</SignalFoxProvider>;
+useEffect(() => {
+  void SignalFox.init({
+    apiKey: 'YOUR_SIGNALFOX_API_KEY',
+    integrations: [
+      reactNavigationIntegration({ navigationRef }),
+      revenueCatIntegration({
+        purchases: Purchases,
+        revenueCatUI: RevenueCatUI,
+      }),
+    ],
+  });
+}, []);
 ```
 
-The provider already includes its internal default integrations for app lifecycle, native modals, and native touchables. You do not need to pass those manually.
+Calling `init` again with the same effective configuration is a no-op. A second `init` with a different `apiKey`, `logOnly`, or integration set is ignored (with a console warning). Concurrent `init` calls share a single in-flight setup.
+
+Use `SignalFox.destroy()` only when you need to tear down the SDK in the same JS process (for example in tests).
+
+The runtime already includes default integrations for app lifecycle, native modals, and native touchables. You do not need to pass those manually.
 
 ## Optional Integrations
 
@@ -145,8 +154,9 @@ You can extend SignalFox with optional integrations depending on the libraries y
 Use `reactNavigationIntegration` if your app uses `@react-navigation/native`.
 
 ```tsx
+import { useEffect } from 'react';
 import {
-  SignalFoxProvider,
+  SignalFox,
   reactNavigationIntegration,
 } from '@asgami-digital/signalfox-react-native';
 import {
@@ -157,16 +167,46 @@ import {
 const navigationRef = createNavigationContainerRef();
 
 export function Root() {
+  useEffect(() => {
+    void SignalFox.init({
+      apiKey: 'YOUR_SIGNALFOX_API_KEY',
+      integrations: [reactNavigationIntegration({ navigationRef })],
+    });
+  }, []);
+
   return (
-    <SignalFoxProvider
-      apiKey="YOUR_SIGNALFOX_API_KEY"
-      integrations={[reactNavigationIntegration({ navigationRef })]}
-    >
-      <NavigationContainer ref={navigationRef}>
-        {/* app */}
-      </NavigationContainer>
-    </SignalFoxProvider>
+    <NavigationContainer ref={navigationRef}>{/* app */}</NavigationContainer>
   );
+}
+```
+
+### Expo Router
+
+Use `expoRouterIntegration` if your app uses Expo Router.
+
+```tsx
+import { useEffect, useMemo } from 'react';
+import { Stack, useNavigationContainerRef } from 'expo-router';
+import {
+  SignalFox,
+  expoRouterIntegration,
+} from '@asgami-digital/signalfox-react-native';
+
+export default function RootLayout() {
+  const navigationRef = useNavigationContainerRef();
+  const integrations = useMemo(
+    () => [expoRouterIntegration({ navigationRef })],
+    [navigationRef]
+  );
+
+  useEffect(() => {
+    void SignalFox.init({
+      apiKey: 'YOUR_SIGNALFOX_API_KEY',
+      integrations,
+    });
+  }, [integrations]);
+
+  return <Stack />;
 }
 ```
 
@@ -177,24 +217,25 @@ Use `revenueCatIntegration` if your app uses `react-native-purchases`.
 If you also use `react-native-purchases-ui`, pass `revenueCatUI` as well.
 
 ```tsx
+import { useEffect } from 'react';
 import Purchases from 'react-native-purchases';
 import RevenueCatUI from 'react-native-purchases-ui';
 import {
-  SignalFoxProvider,
+  SignalFox,
   revenueCatIntegration,
 } from '@asgami-digital/signalfox-react-native';
 
-<SignalFoxProvider
-  apiKey="YOUR_SIGNALFOX_API_KEY"
-  integrations={[
-    revenueCatIntegration({
-      purchases: Purchases,
-      revenueCatUI: RevenueCatUI,
-    }),
-  ]}
->
-  <App />
-</SignalFoxProvider>;
+useEffect(() => {
+  void SignalFox.init({
+    apiKey: 'YOUR_SIGNALFOX_API_KEY',
+    integrations: [
+      revenueCatIntegration({
+        purchases: Purchases,
+        revenueCatUI: RevenueCatUI,
+      }),
+    ],
+  });
+}, []);
 ```
 
 ### react-native-iap
@@ -202,22 +243,23 @@ import {
 Use `reactNativeIapIntegration` if your app uses `react-native-iap`.
 
 ```tsx
+import { useEffect } from 'react';
 import * as ReactNativeIap from 'react-native-iap';
 import {
-  SignalFoxProvider,
+  SignalFox,
   reactNativeIapIntegration,
 } from '@asgami-digital/signalfox-react-native';
 
-<SignalFoxProvider
-  apiKey="YOUR_SIGNALFOX_API_KEY"
-  integrations={[
-    reactNativeIapIntegration({
-      reactNativeIap: ReactNativeIap,
-    }),
-  ]}
->
-  <App />
-</SignalFoxProvider>;
+useEffect(() => {
+  void SignalFox.init({
+    apiKey: 'YOUR_SIGNALFOX_API_KEY',
+    integrations: [
+      reactNativeIapIntegration({
+        reactNativeIap: ReactNativeIap,
+      }),
+    ],
+  });
+}, []);
 ```
 
 ## `signalFoxId` Requirements
@@ -274,31 +316,99 @@ Avoid:
 
 You can also provide `signalFoxDisplayName` when you want a separate human-readable label, but `signalFoxId` is the required identifier.
 
+## Manual Tracking
+
+Most tracking is automatic once the patches and integrations are set up. Use these methods only for UI surfaces that are not covered automatically.
+
+### Funnel Step
+
+Use `SignalFox.trackFunnelStep()` for explicit product or onboarding funnel milestones.
+
+```ts
+import { SignalFox } from '@asgami-digital/signalfox-react-native';
+
+SignalFox.trackFunnelStep({
+  funnelName: 'checkout',
+  signalFoxNodeId: 'checkout-plan-selected',
+  signalFoxNodeDisplayName: 'Plan selected',
+  stepIndex: 1,
+});
+```
+
+Parameters:
+
+- `funnelName`: public funnel name
+- `signalFoxNodeId`: stable node identifier
+- `signalFoxNodeDisplayName`: optional human-readable label
+- `stepIndex`: optional numeric order
+
+### Subview
+
+Use `SignalFox.trackSubview()` when a meaningful area inside the current screen becomes active.
+
+```ts
+SignalFox.trackSubview({
+  signalFoxNodeId: 'settings-billing-panel',
+  signalFoxNodeDisplayName: 'Billing panel',
+});
+```
+
+Parameters:
+
+- `signalFoxNodeId`: stable node identifier
+- `signalFoxNodeDisplayName`: optional human-readable label
+
+### Manual Modal Surface
+
+If part of your UI behaves like a modal but does not use the native React Native `Modal`, you can track it manually with the same modal event family:
+
+```ts
+import { SignalFox } from '@asgami-digital/signalfox-react-native';
+
+SignalFox.trackModalShown({
+  signalFoxNodeId: 'export-sheet',
+  signalFoxNodeDisplayName: 'Export Sheet',
+  visible: true,
+});
+
+SignalFox.trackModalShown({
+  signalFoxNodeId: 'export-sheet',
+  signalFoxNodeDisplayName: 'Export Sheet',
+  visible: false,
+});
+```
+
+When `visible` is `true`, SignalFox emits `modal_open`. When `visible` is `false`, it emits `modal_close` only if that modal is currently present in the modal stack.
+
+Parameters:
+
+- `visible`: whether the modal-like surface is currently shown
+- `signalFoxNodeId`: stable node identifier
+- `signalFoxNodeDisplayName`: optional human-readable label
+
 ## Recommended App Startup Shape
 
 A practical setup usually looks like this:
 
-```ts
+```js
 // index.js
-import { AppRegistry } from 'react-native';
-import {
-  applyModalPatch,
-  applyTouchablePatch,
-} from '@asgami-digital/signalfox-react-native';
-import App from './src/App';
-import { name as appName } from './app.json';
+const { AppRegistry } = require('react-native');
+const signalFox = require('@asgami-digital/signalfox-react-native');
 
-applyModalPatch();
-applyTouchablePatch();
+signalFox.applyModalPatch();
+signalFox.applyTouchablePatch();
+
+const App = require('./src/App').default;
+const { name: appName } = require('./app.json');
 
 AppRegistry.registerComponent(appName, () => App);
 ```
 
 ```tsx
 // src/App.tsx
-import React from 'react';
+import { useEffect } from 'react';
 import {
-  SignalFoxProvider,
+  SignalFox,
   reactNavigationIntegration,
 } from '@asgami-digital/signalfox-react-native';
 import {
@@ -309,15 +419,17 @@ import {
 const navigationRef = createNavigationContainerRef();
 
 export default function App() {
+  useEffect(() => {
+    void SignalFox.init({
+      apiKey: 'YOUR_SIGNALFOX_API_KEY',
+      integrations: [reactNavigationIntegration({ navigationRef })],
+    });
+  }, []);
+
   return (
-    <SignalFoxProvider
-      apiKey="YOUR_SIGNALFOX_API_KEY"
-      integrations={[reactNavigationIntegration({ navigationRef })]}
-    >
-      <NavigationContainer ref={navigationRef}>
-        {/* screens */}
-      </NavigationContainer>
-    </SignalFoxProvider>
+    <NavigationContainer ref={navigationRef}>
+      {/* screens */}
+    </NavigationContainer>
   );
 }
 ```
@@ -326,12 +438,14 @@ export default function App() {
 
 Most apps only need:
 
-- `SignalFoxProvider`
+- `SignalFox.init(...)` (or the `SignalFox` namespace object with the same methods)
 - `applyModalPatch()`
 - `applyTouchablePatch()`
 - `reactNavigationIntegration(...)` when using React Navigation
+- `expoRouterIntegration(...)` when using Expo Router
 - `revenueCatIntegration(...)` when using RevenueCat
 - `reactNativeIapIntegration(...)` when using `react-native-iap`
+- `SignalFox.trackFunnelStep(...)`, `SignalFox.trackSubview(...)`, or `SignalFox.trackModalShown(...)` for manual cases
 
 ## Contributing
 

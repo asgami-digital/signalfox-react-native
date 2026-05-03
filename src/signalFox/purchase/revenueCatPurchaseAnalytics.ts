@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import SignalfoxReactNative from '../../NativeSignalfoxReactNative';
 import {
   notifyModalClosed,
@@ -21,6 +21,18 @@ const PAYWALL_RESULT_ERROR = 'ERROR';
 const PAYWALL_RESULT_CANCELLED = 'CANCELLED';
 const PAYWALL_RESULT_PURCHASED = 'PURCHASED';
 
+function isSignalFoxDebugEnabled(): boolean {
+  return (
+    (globalThis as { __SIGNALFOX_DEBUG__?: boolean }).__SIGNALFOX_DEBUG__ ===
+    true
+  );
+}
+
+function debugLog(...args: unknown[]): void {
+  if (!isSignalFoxDebugEnabled()) return;
+  console.log(...args);
+}
+
 let activeRevenueCatPaywallSources = 0;
 let heuristicPaywallState: {
   paywallIsOpen: boolean;
@@ -36,12 +48,26 @@ let heuristicPaywallState: {
   sawPurchaseTerminalDuringPaywall: false,
 };
 
+type AppStateSubscriptionLike = { remove?: () => void };
+let heuristicAppStateSubscription: AppStateSubscriptionLike | null = null;
+
+function detachHeuristicAppStateListener(): void {
+  heuristicAppStateSubscription?.remove?.();
+  heuristicAppStateSubscription = null;
+}
+
 function openRevenueCatPaywallSource(
   trigger: string,
   timestamp?: number
 ): void {
   const shouldEmitOpen = activeRevenueCatPaywallSources === 0;
   activeRevenueCatPaywallSources += 1;
+  debugLog('[SignalFox][RevenueCat][Paywall] open source+', {
+    trigger,
+    timestamp,
+    activeRevenueCatPaywallSources,
+    shouldEmitOpen,
+  });
 
   if (!shouldEmitOpen) {
     return;
@@ -62,6 +88,11 @@ function closeRevenueCatPaywallSource(
   trigger: string,
   timestamp?: number
 ): void {
+  debugLog('[SignalFox][RevenueCat][Paywall] close source-', {
+    trigger,
+    timestamp,
+    activeRevenueCatPaywallSources,
+  });
   if (activeRevenueCatPaywallSources <= 0) {
     return;
   }
@@ -83,6 +114,7 @@ function closeRevenueCatPaywallSource(
 }
 
 function resetHeuristicPaywallState(): void {
+  detachHeuristicAppStateListener();
   heuristicPaywallState = {
     paywallIsOpen: false,
     sawInactiveDuringPaywall: false,
@@ -106,6 +138,7 @@ function markHeuristicPaywallPurchaseTerminalSeen(): void {
 }
 
 async function beginHeuristicPaywallSession(openedAt: number): Promise<void> {
+  detachHeuristicAppStateListener();
   heuristicPaywallState = {
     paywallIsOpen: true,
     paywallOpenedAt: openedAt,
@@ -114,6 +147,31 @@ async function beginHeuristicPaywallSession(openedAt: number): Promise<void> {
     sawPurchaseStartedDuringPaywall: false,
     sawPurchaseTerminalDuringPaywall: false,
   };
+  debugLog('[SignalFox][RevenueCat][Heuristic] session begin', {
+    openedAt,
+    platform: Platform.OS,
+  });
+
+  const addEventListener = AppState?.addEventListener;
+  if (typeof addEventListener === 'function') {
+    heuristicAppStateSubscription = addEventListener.call(
+      AppState,
+      'change',
+      (nextState: unknown) => {
+        if (!heuristicPaywallState.paywallIsOpen) return;
+        if (nextState !== 'inactive') return;
+        heuristicPaywallState.sawInactiveDuringPaywall = true;
+        if (heuristicPaywallState.inactiveAt == null) {
+          heuristicPaywallState.inactiveAt = Date.now();
+        }
+        debugLog('[SignalFox][RevenueCat][Heuristic] AppState inactive', {
+          source: 'react-native',
+          inactiveAt: heuristicPaywallState.inactiveAt,
+        });
+      }
+    ) as AppStateSubscriptionLike;
+    debugLog('[SignalFox][RevenueCat][Heuristic] AppState listener attached');
+  }
 
   if (Platform.OS !== 'ios') {
     return;
@@ -121,7 +179,11 @@ async function beginHeuristicPaywallSession(openedAt: number): Promise<void> {
 
   try {
     await SignalfoxReactNative.beginHeuristicPaywallSession?.();
+    debugLog('[SignalFox][RevenueCat][Heuristic] native session begin ok');
   } catch {
+    debugLog(
+      '[SignalFox][RevenueCat][Heuristic] native session begin failed (fallback RN AppState only)'
+    );
     // Best-effort heuristic: if the native bridge fails, continue with modal analytics.
   }
 }
@@ -140,6 +202,9 @@ async function endHeuristicPaywallSession(): Promise<{
     try {
       const nativeSnapshot =
         await SignalfoxReactNative.endHeuristicPaywallSession?.();
+      debugLog('[SignalFox][RevenueCat][Heuristic] native session end snapshot', {
+        nativeSnapshot,
+      });
       if (nativeSnapshot?.sawInactiveDuringPaywall) {
         snapshot.sawInactiveDuringPaywall = true;
       }
@@ -151,10 +216,16 @@ async function endHeuristicPaywallSession(): Promise<{
         snapshot.inactiveAt = nativeSnapshot.inactiveAt;
       }
     } catch {
+      debugLog(
+        '[SignalFox][RevenueCat][Heuristic] native session end failed (using RN/local snapshot)'
+      );
       // Best-effort heuristic: if the native bridge fails, do not emit heuristic started.
     }
   }
 
+  debugLog('[SignalFox][RevenueCat][Heuristic] session end merged snapshot', {
+    snapshot,
+  });
   resetHeuristicPaywallState();
   return snapshot;
 }
@@ -186,8 +257,19 @@ async function finalizeHeuristicPaywallSession(params: {
   const { method, result, trigger, openedAt } = params;
   const heuristicSnapshot = await endHeuristicPaywallSession();
   const didPresent = shouldTreatAsPresentedPaywall(method, result);
+  debugLog('[SignalFox][RevenueCat][Heuristic] finalize begin', {
+    method,
+    result,
+    trigger,
+    openedAt,
+    didPresent,
+    heuristicSnapshot,
+  });
 
   if (!didPresent) {
+    debugLog(
+      '[SignalFox][RevenueCat][Heuristic] finalize skip: paywall not presented'
+    );
     return;
   }
 
@@ -207,6 +289,9 @@ async function finalizeHeuristicPaywallSession(params: {
     !heuristicSnapshot.sawPurchaseTerminalDuringPaywall &&
     shouldEmitHeuristicPurchaseStarted(result)
   ) {
+    debugLog(
+      '[SignalFox][RevenueCat][Heuristic] emitting purchase_started (heuristic)'
+    );
     notifyPurchaseStarted({
       platform,
       store,
@@ -226,6 +311,9 @@ async function finalizeHeuristicPaywallSession(params: {
     (heuristicSnapshot.sawPurchaseStartedDuringPaywall ||
       emittedStartedInFinalize)
   ) {
+    debugLog(
+      '[SignalFox][RevenueCat][Heuristic] emitting purchase_cancelled (finalize)'
+    );
     notifyPurchaseCancelled({
       platform,
       store,
@@ -235,6 +323,11 @@ async function finalizeHeuristicPaywallSession(params: {
   // Close the synthetic paywall modal after any heuristic purchase emission so the
   // purchase flow keeps the paywall surface attribution instead of the post-dismiss UI.
   closeRevenueCatPaywallSource(trigger);
+  debugLog('[SignalFox][RevenueCat][Heuristic] finalize end', {
+    trigger,
+    result,
+    emittedStartedInFinalize,
+  });
 }
 
 const PATCHABLE_METHODS = [
@@ -536,6 +629,10 @@ function buildPaywallPurchaseAnalyticsProps(
     props.onPurchaseStarted,
     (event: unknown) => {
       const productId = productIdFromPaywallPurchaseStartedEvent(event);
+      debugLog('[SignalFox][RevenueCat][Paywall] callback onPurchaseStarted', {
+        productId,
+        event,
+      });
       markHeuristicPaywallPurchaseStartedSeen();
       notifyPurchaseStarted({
         productId,
@@ -551,6 +648,13 @@ function buildPaywallPurchaseAnalyticsProps(
       const fallbackId = productIdFromPaywallPurchaseStartedEvent(event);
       const { price, currency } =
         inferPriceCurrencyFromPaywallCompletedEvent(event);
+      debugLog('[SignalFox][RevenueCat][Paywall] callback onPurchaseCompleted', {
+        fallbackId,
+        resolvedProductId: inferProductIdFromResult(event, fallbackId),
+        price,
+        currency,
+        event,
+      });
       markHeuristicPaywallPurchaseTerminalSeen();
       notifyPurchaseCompleted({
         productId: inferProductIdFromResult(event, fallbackId),
@@ -565,6 +669,7 @@ function buildPaywallPurchaseAnalyticsProps(
   out.onPurchaseCancelled = chainPaywallCallback(
     props.onPurchaseCancelled,
     () => {
+      debugLog('[SignalFox][RevenueCat][Paywall] callback onPurchaseCancelled');
       markHeuristicPaywallPurchaseTerminalSeen();
       notifyPurchaseCancelled({
         platform,
@@ -578,6 +683,11 @@ function buildPaywallPurchaseAnalyticsProps(
     (event: unknown) => {
       const err = purchasesErrorFromPaywallEvent(event);
       const productId = productIdFromPaywallPurchaseStartedEvent(event);
+      debugLog('[SignalFox][RevenueCat][Paywall] callback onPurchaseError', {
+        productId,
+        err,
+        event,
+      });
       markHeuristicPaywallPurchaseTerminalSeen();
       if (isRevenueCatUserCancellation(err, Purchases)) {
         notifyPurchaseCancelled({
@@ -601,6 +711,10 @@ function buildPaywallPurchaseAnalyticsProps(
   out.onRestoreCompleted = chainPaywallCallback(
     props.onRestoreCompleted,
     (event: unknown) => {
+      debugLog('[SignalFox][RevenueCat][Paywall] callback onRestoreCompleted', {
+        restoredProductIds: inferRestoreProductIds(event),
+        event,
+      });
       notifyRestoreCompleted({
         platform,
         store,
@@ -634,11 +748,9 @@ function installRevenueCatPurchaseHooks(Purchases: any): {
 
     Purchases[name] = (...args: unknown[]) => {
       const productId = purchaseProductIdFromArgs(name, args);
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.log('[SignalFox][RevenueCat] compra interceptada', name, {
-          productId: productId ?? '(sin id)',
-        });
-      }
+      debugLog('[SignalFox][RevenueCat] compra interceptada', name, {
+        productId: productId ?? '(sin id)',
+      });
       markHeuristicPaywallPurchaseStartedSeen();
       notifyPurchaseStarted({
         productId,
@@ -743,6 +855,12 @@ function installRevenueCatPaywallHooks(
     RevenueCatUI[name] = async (...args: unknown[]) => {
       const trigger = `revenuecat_ui.${name}`;
       const openedAt = Date.now();
+      debugLog('[SignalFox][RevenueCat][Paywall] method begin', {
+        method: name,
+        trigger,
+        openedAt,
+        argsLength: args.length,
+      });
 
       if (name === 'presentPaywall') {
         openRevenueCatPaywallSource(trigger, openedAt);
@@ -753,6 +871,11 @@ function installRevenueCatPaywallHooks(
         const result = await Promise.resolve(
           original.apply(RevenueCatUI, args)
         );
+        debugLog('[SignalFox][RevenueCat][Paywall] method resolved', {
+          method: name,
+          trigger,
+          result,
+        });
         await finalizeHeuristicPaywallSession({
           method: name,
           result,
@@ -761,6 +884,11 @@ function installRevenueCatPaywallHooks(
         });
         return result;
       } catch (error) {
+        debugLog('[SignalFox][RevenueCat][Paywall] method rejected', {
+          method: name,
+          trigger,
+          error,
+        });
         await finalizeHeuristicPaywallSession({
           method: name,
           result: PAYWALL_RESULT_ERROR,
@@ -858,7 +986,7 @@ export function startRevenueCatPurchaseAnalytics(
       );
       if (purchaseInstall) {
         teardowns.push(purchaseInstall.teardown);
-        console.log(
+        debugLog(
           '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de compra activados:',
           purchaseInstall.patchedMethods.join(', ')
         );
@@ -894,7 +1022,7 @@ export function startRevenueCatPurchaseAnalytics(
       );
       if (paywallTeardown) {
         teardowns.push(paywallTeardown);
-        console.log(
+        debugLog(
           '[SignalfoxPurchaseAnalyticsBridge][TS] RevenueCat: hooks de paywall activados'
         );
       }

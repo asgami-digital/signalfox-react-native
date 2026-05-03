@@ -63,7 +63,7 @@ describe('expoRouterIntegration', () => {
       flush: jest.fn(),
       trackEvent: jest.fn(),
       track: jest.fn(),
-      trackStep: jest.fn(),
+      trackFunnelStep: jest.fn(),
       trackSubview: jest.fn(),
       markNavigationIntentPending: jest.fn(),
       clearNavigationIntentPending: jest.fn(),

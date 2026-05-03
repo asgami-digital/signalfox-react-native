@@ -7,6 +7,7 @@ export interface BackendEventDto {
   environment?: string | null;
   anonymous_id?: string | null;
   session_id?: string | null;
+  engagement_session_id?: string | null;
 
   event_name: string;
   event_family: string;

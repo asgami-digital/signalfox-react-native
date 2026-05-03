@@ -1,6 +1,5 @@
 jest.mock('../../../NativeSignalfoxReactNative', () => ({
   default: {
-    multiply: jest.fn(() => 0),
     getAppVersion: jest.fn(() => Promise.resolve('1.0.0')),
     getAnonymousId: jest.fn(() => Promise.resolve('test-anon')),
     startNativePurchaseAnalytics: jest.fn(() => Promise.resolve()),

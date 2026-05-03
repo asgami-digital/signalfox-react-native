@@ -383,6 +383,8 @@ export function reactNavigationIntegration(
       let lastActiveBranchKey: string | null = null;
       let pendingNavigationTimestamp: number | null = null;
       let bootstrapInterval: ReturnType<typeof setInterval> | null = null;
+      let stateListenerAttached = false;
+      let attachedStateListenerTarget: unknown = null;
 
       const markNavigationIntent = () => {
         pendingNavigationTimestamp = Date.now();
@@ -401,7 +403,29 @@ export function reactNavigationIntegration(
         }
       };
 
+      const tryAttachStateListener = (target: unknown) => {
+        if (
+          stateListenerAttached ||
+          !target ||
+          typeof target !== 'object' ||
+          target === attachedStateListenerTarget
+        ) {
+          return;
+        }
+        const fn = (target as { addListener?: unknown }).addListener;
+        if (typeof fn !== 'function') return;
+        const unsub = fn.call(target, 'state', handleStateChange);
+        if (typeof unsub !== 'function') return;
+        stateListenerAttached = true;
+        attachedStateListenerTarget = target;
+        unsubscribers.push(unsub);
+      };
+
       const handleStateChange = () => {
+        // Some apps initialize `navigationRef.current` after this integration setup.
+        // Retry binding the listener so we do not depend only on bootstrap polling.
+        tryAttachStateListener(navigationRef.current);
+
         const ref = navigationRef.current;
         if (!ref?.getRootState) return;
         const state = ref.getRootState() as NavStateLike | undefined;
@@ -503,8 +527,10 @@ export function reactNavigationIntegration(
         previousRouteSnapshot = currentRouteSnapshot;
         previousStackRouteKeys = currentStackRouteKeys;
         core.clearNavigationIntentPending?.();
-        // First resolved screen: stop the startup polling.
-        stopBootstrapPolling();
+        // Stop startup polling only after we have a persistent state listener.
+        if (stateListenerAttached) {
+          stopBootstrapPolling();
+        }
       };
 
       const unsubscribers: Array<() => void> = [];
@@ -527,17 +553,9 @@ export function reactNavigationIntegration(
         if (typeof unsubUnsafe === 'function') unsubscribers.push(unsubUnsafe);
       }
 
-      const addStateListener = (target: unknown) => {
-        if (!target || typeof target !== 'object') return;
-        const fn = (target as { addListener?: unknown }).addListener;
-        if (typeof fn !== 'function') return;
-        const unsub = fn.call(target, 'state', handleStateChange);
-        if (typeof unsub === 'function') unsubscribers.push(unsub);
-      };
-
       // Preferimos escuchar cambios en el estado del navigator.
-      addStateListener(navigationRef);
-      addStateListener(navigationRef.current);
+      tryAttachStateListener(navigationRef);
+      tryAttachStateListener(navigationRef.current);
 
       // Some implementations emit 'ready' (if it exists, we trigger on the first valid state).
       if (typeof addListener === 'function') {
