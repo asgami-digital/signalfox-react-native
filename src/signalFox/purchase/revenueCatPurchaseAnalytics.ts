@@ -202,9 +202,12 @@ async function endHeuristicPaywallSession(): Promise<{
     try {
       const nativeSnapshot =
         await SignalfoxReactNative.endHeuristicPaywallSession?.();
-      debugLog('[SignalFox][RevenueCat][Heuristic] native session end snapshot', {
-        nativeSnapshot,
-      });
+      debugLog(
+        '[SignalFox][RevenueCat][Heuristic] native session end snapshot',
+        {
+          nativeSnapshot,
+        }
+      );
       if (nativeSnapshot?.sawInactiveDuringPaywall) {
         snapshot.sawInactiveDuringPaywall = true;
       }
@@ -648,13 +651,16 @@ function buildPaywallPurchaseAnalyticsProps(
       const fallbackId = productIdFromPaywallPurchaseStartedEvent(event);
       const { price, currency } =
         inferPriceCurrencyFromPaywallCompletedEvent(event);
-      debugLog('[SignalFox][RevenueCat][Paywall] callback onPurchaseCompleted', {
-        fallbackId,
-        resolvedProductId: inferProductIdFromResult(event, fallbackId),
-        price,
-        currency,
-        event,
-      });
+      debugLog(
+        '[SignalFox][RevenueCat][Paywall] callback onPurchaseCompleted',
+        {
+          fallbackId,
+          resolvedProductId: inferProductIdFromResult(event, fallbackId),
+          price,
+          currency,
+          event,
+        }
+      );
       markHeuristicPaywallPurchaseTerminalSeen();
       notifyPurchaseCompleted({
         productId: inferProductIdFromResult(event, fallbackId),

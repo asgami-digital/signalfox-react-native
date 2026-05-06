@@ -1,4 +1,7 @@
-import type { AnalyticsIntegration, IAnalyticsCore } from '../types/integration';
+import type {
+  AnalyticsIntegration,
+  IAnalyticsCore,
+} from '../types/integration';
 import {
   registerPurchaseAnalyticsCore,
   unregisterPurchaseAnalyticsCore,

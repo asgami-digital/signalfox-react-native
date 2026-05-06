@@ -1,5 +1,8 @@
 import { Platform } from 'react-native';
-import type { AnalyticsIntegration, IAnalyticsCore } from '../types/integration';
+import type {
+  AnalyticsIntegration,
+  IAnalyticsCore,
+} from '../types/integration';
 import type { NativePurchaseEventPayload } from '../purchase/purchaseEventTypes';
 import {
   notifyPurchaseCancelled,

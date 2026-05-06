@@ -5,7 +5,10 @@
  */
 
 import { AppState, Platform, type AppStateStatus } from 'react-native';
-import type { AnalyticsIntegration, IAnalyticsCore } from '../types/integration';
+import type {
+  AnalyticsIntegration,
+  IAnalyticsCore,
+} from '../types/integration';
 import { ENGAGEMENT_SESSION_INACTIVITY_MS } from '../core/constants';
 
 type LifecycleSignal = 'enter_background' | 'enter_foreground' | null;

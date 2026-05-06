@@ -715,7 +715,8 @@ export class AnalyticsCore implements IAnalyticsCore {
       this.pickOptionalString((event as { target_id?: unknown }).target_id);
     const explicitSignalFoxDisplayName =
       this.pickOptionalString(
-        (event as { signalFoxNodeDisplayName?: unknown }).signalFoxNodeDisplayName
+        (event as { signalFoxNodeDisplayName?: unknown })
+          .signalFoxNodeDisplayName
       ) ??
       this.pickOptionalString(
         (event as { signalFoxDisplayName?: unknown }).signalFoxDisplayName

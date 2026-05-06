@@ -59,7 +59,10 @@ function normalizeModalStackEntry(
 }
 
 function maybeLogModalStack(action: string, modalId?: string | null): void {
-  if ((globalThis as { __SIGNALFOX_DEBUG__?: boolean }).__SIGNALFOX_DEBUG__ !== true) {
+  if (
+    (globalThis as { __SIGNALFOX_DEBUG__?: boolean }).__SIGNALFOX_DEBUG__ !==
+    true
+  ) {
     return;
   }
 
@@ -95,8 +98,7 @@ export function isModalInStack(stackKeyOrId?: string | null): boolean {
   }
 
   return modalStack.some(
-    (entry) =>
-      entry.stackKey === stackKeyOrId || entry.id === stackKeyOrId
+    (entry) => entry.stackKey === stackKeyOrId || entry.id === stackKeyOrId
   );
 }
 

@@ -28,12 +28,14 @@ export default function RootLayout() {
   );
 
   useEffect(() => {
-    void SignalFox.init({
+    SignalFox.init({
       apiKey: hasSignalFoxApiKey()
         ? demoConfig.signalFoxApiKey
         : 'ak_dev__expo_demo_placeholder',
       logOnly: !hasSignalFoxApiKey(),
       integrations,
+    }).catch((error) => {
+      console.error('[expo-rniap] SignalFox init failed', error);
     });
   }, [integrations]);
 
@@ -41,10 +43,7 @@ export default function RootLayout() {
     <Stack>
       <Stack.Screen name="index" options={{ title: 'Home' }} />
       <Stack.Screen name="purchase" options={{ title: 'PurchaseScreen' }} />
-      <Stack.Screen
-        name="modal-example"
-        options={{ title: 'ModalExample' }}
-      />
+      <Stack.Screen name="modal-example" options={{ title: 'ModalExample' }} />
       <Stack.Screen
         name="secondary-flow"
         options={{ title: 'SecondaryFlowScreen' }}

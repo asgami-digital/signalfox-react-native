@@ -503,7 +503,10 @@ describe('revenueCatPurchaseAnalytics', () => {
     jest.doMock('react-native', () => ({
       Platform: { OS: 'ios' },
       AppState: {
-        addEventListener: (_eventName: string, listener: (s: string) => void) => {
+        addEventListener: (
+          _eventName: string,
+          listener: (s: string) => void
+        ) => {
           appStateChangeListener = listener;
           return {
             remove: () => {

@@ -14,7 +14,7 @@ if (__DEV__ && !hasSignalFoxApiKey()) {
   );
 }
 
-void SignalFox.init({
+SignalFox.init({
   apiKey: demoConfig.signalFoxApiKey,
   integrations: [
     reactNavigationIntegration({ navigationRef }),
@@ -23,4 +23,6 @@ void SignalFox.init({
       revenueCatUI: RevenueCatUI,
     }),
   ],
+}).catch((error) => {
+  console.error('[rn-revenuecat] SignalFox init failed', error);
 });

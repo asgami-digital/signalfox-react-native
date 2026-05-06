@@ -222,8 +222,9 @@ describe('reactNativeIapIntegration', () => {
     const cleanup = integration.setup(core as any);
 
     await (
-      (rootModule.default as Record<string, unknown>)
-        .requestPurchase as ((input: unknown) => Promise<unknown>) | undefined
+      (rootModule.default as Record<string, unknown>).requestPurchase as
+        | ((input: unknown) => Promise<unknown>)
+        | undefined
     )?.({
       request: { apple: { sku: 'pro_monthly' } },
       type: 'subs',
@@ -534,18 +535,22 @@ describe('reactNativeIapIntegration', () => {
 
     const immutableModule: Record<string, unknown> = {};
 
-    Object.defineProperty(immutableModule, 'requestPurchaseOnPromotedProductIOS', {
-      configurable: false,
-      enumerable: true,
-      get: () =>
-        jest.fn(async () => {
-          const hybridObject = nitroModules.createHybridObject(
-            'RnIap'
-          ) as Record<string, unknown>;
-          await (hybridObject.buyPromotedProductIOS as Function)();
-          return true;
-        }),
-    });
+    Object.defineProperty(
+      immutableModule,
+      'requestPurchaseOnPromotedProductIOS',
+      {
+        configurable: false,
+        enumerable: true,
+        get: () =>
+          jest.fn(async () => {
+            const hybridObject = nitroModules.createHybridObject(
+              'RnIap'
+            ) as Record<string, unknown>;
+            await (hybridObject.buyPromotedProductIOS as Function)();
+            return true;
+          }),
+      }
+    );
 
     Object.defineProperty(immutableModule, 'purchaseUpdatedListener', {
       configurable: false,
