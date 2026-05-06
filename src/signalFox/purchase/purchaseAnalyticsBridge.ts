@@ -381,8 +381,8 @@ function trackModalVisibilityChange({
     timestamp > 0
       ? { timestamp }
       : {}),
-    signalFoxId: trimmedTargetId,
-    ...(trimmedDisplayName ? { signalFoxDisplayName: trimmedDisplayName } : {}),
+    signalFoxNodeId: trimmedTargetId,
+    ...(trimmedDisplayName ? { signalFoxNodeDisplayName: trimmedDisplayName } : {}),
     target_type: 'modal',
     payload: {
       modalName: trimmedTargetId,

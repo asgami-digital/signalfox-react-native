@@ -3,19 +3,19 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 type ActionButtonProps = {
   label: string;
   onPress: () => void;
-  signalFoxId: string;
+  signalFoxNodeId: string;
   variant?: 'primary' | 'secondary' | 'ghost';
 };
 
 export function ActionButton({
   label,
   onPress,
-  signalFoxId,
+  signalFoxNodeId,
   variant = 'primary',
 }: ActionButtonProps) {
   return (
     <Pressable
-      signalFoxId={signalFoxId}
+      signalFoxNodeId={signalFoxNodeId}
       style={[styles.button, styles[variant]]}
       onPress={onPress}
     >

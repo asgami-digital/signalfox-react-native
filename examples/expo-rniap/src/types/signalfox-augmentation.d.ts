@@ -3,15 +3,15 @@ import 'react-native';
 
 declare module 'react' {
   interface Attributes {
-    signalFoxId?: string;
-    signalFoxDisplayName?: string;
+    signalFoxNodeId?: string;
+    signalFoxNodeDisplayName?: string;
   }
 }
 
 declare module 'react-native' {
   interface ViewProps {
-    signalFoxId?: string;
-    signalFoxDisplayName?: string;
+    signalFoxNodeId?: string;
+    signalFoxNodeDisplayName?: string;
   }
 }
 

@@ -16,7 +16,7 @@ export default function NavigationModalScreen() {
       />
       <ActionButton
         label="Close modal"
-        signalFoxId="expo_navigation_modal_close"
+        signalFoxNodeId="expo_navigation_modal_close"
         onPress={() => {
           logDemoEvent('expo_navigation_modal_close');
           router.back();
@@ -24,7 +24,7 @@ export default function NavigationModalScreen() {
       />
       <ActionButton
         label="Test click"
-        signalFoxId="expo_navigation_modal_idle_click"
+        signalFoxNodeId="expo_navigation_modal_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('expo_navigation_modal_idle_click');

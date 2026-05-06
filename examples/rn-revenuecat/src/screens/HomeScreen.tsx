@@ -28,7 +28,7 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.groupTitle}>Main Flows</Text>
         <ActionButton
           label="Manual purchase"
-          signalFoxId="home_go_manual_purchase"
+          signalFoxNodeId="home_go_manual_purchase"
           onPress={() => {
             logDemoEvent('navigate_purchase_manual');
             navigation.navigate('PurchaseManual');
@@ -36,7 +36,7 @@ export function HomeScreen({ navigation }: Props) {
         />
         <ActionButton
           label="Embedded paywall UI"
-          signalFoxId="home_go_paywall_ui"
+          signalFoxNodeId="home_go_paywall_ui"
           variant="secondary"
           onPress={() => {
             logDemoEvent('navigate_purchase_paywall_ui');
@@ -45,7 +45,7 @@ export function HomeScreen({ navigation }: Props) {
         />
         <ActionButton
           label="Present paywall"
-          signalFoxId="home_go_present_paywall"
+          signalFoxNodeId="home_go_present_paywall"
           onPress={() => {
             logDemoEvent('navigate_purchase_present_paywall');
             navigation.navigate('PurchasePresentPaywall');
@@ -57,7 +57,7 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.groupTitle}>Modals and Interaction</Text>
         <ActionButton
           label="Modal examples"
-          signalFoxId="home_go_modal_example"
+          signalFoxNodeId="home_go_modal_example"
           variant="ghost"
           onPress={() => {
             logDemoEvent('navigate_modal_example');
@@ -66,7 +66,7 @@ export function HomeScreen({ navigation }: Props) {
         />
         <ActionButton
           label="Open modal screen (stack)"
-          signalFoxId="home_open_navigation_modal"
+          signalFoxNodeId="home_open_navigation_modal"
           variant="ghost"
           onPress={() => {
             logDemoEvent('navigate_navigation_modal');
@@ -75,7 +75,7 @@ export function HomeScreen({ navigation }: Props) {
         />
         <ActionButton
           label="Test click without action"
-          signalFoxId="home_idle_click"
+          signalFoxNodeId="home_idle_click"
           variant="ghost"
           onPress={() => {
             logDemoEvent('home_idle_click');

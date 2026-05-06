@@ -91,7 +91,7 @@ describe('AnalyticsCore purchase flow timestamps', () => {
       type: 'component_press',
       timestamp: t0 + 5,
       payload: {},
-      signalFoxId: 'b',
+      signalFoxNodeId: 'b',
       target_type: 'button',
     } as any);
     core.trackEvent({
@@ -318,7 +318,7 @@ describe('AnalyticsCore purchase flow timestamps', () => {
     core.trackEvent({
       type: 'modal_open',
       timestamp: t0 + 50,
-      signalFoxDisplayName: 'RevenueCat Paywall',
+      signalFoxNodeDisplayName: 'RevenueCat Paywall',
       target_type: 'modal',
       payload: {
         modalName: 'RevenueCat Paywall',

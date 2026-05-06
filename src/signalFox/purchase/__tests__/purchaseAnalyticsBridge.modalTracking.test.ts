@@ -44,8 +44,8 @@ describe('trackModalShown', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'export-sheet',
-        signalFoxDisplayName: 'Export Sheet',
+        signalFoxNodeId: 'export-sheet',
+        signalFoxNodeDisplayName: 'Export Sheet',
         target_type: 'modal',
         payload: expect.objectContaining({
           modalName: 'export-sheet',
@@ -84,8 +84,8 @@ describe('trackModalShown', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_close',
-        signalFoxId: 'export-sheet',
-        signalFoxDisplayName: 'Export Sheet',
+        signalFoxNodeId: 'export-sheet',
+        signalFoxNodeDisplayName: 'Export Sheet',
         payload: expect.objectContaining({
           modalName: 'export-sheet',
           parent_modal: null,
@@ -151,7 +151,7 @@ describe('trackModalShown', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'export-sheet',
+        signalFoxNodeId: 'export-sheet',
         target_type: 'modal',
         payload: {
           modalName: 'export-sheet',
@@ -183,7 +183,7 @@ describe('trackModalShown', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_close',
-        signalFoxId: 'export-sheet',
+        signalFoxNodeId: 'export-sheet',
         target_type: 'modal',
         payload: {
           modalName: 'export-sheet',
@@ -205,7 +205,7 @@ describe('trackModalShown', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'export-sheet',
+        signalFoxNodeId: 'export-sheet',
       })
     );
   });

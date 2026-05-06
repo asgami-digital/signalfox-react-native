@@ -48,7 +48,7 @@ export function PurchasePaywallUIScreen() {
 
       <ActionButton
         label="Test click before paywall"
-        signalFoxId="paywall_ui_idle_click"
+        signalFoxNodeId="paywall_ui_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('paywall_ui_idle_click');

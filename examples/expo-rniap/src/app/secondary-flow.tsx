@@ -17,7 +17,7 @@ export default function SecondaryFlowScreen() {
 
       <ActionButton
         label="Go to PurchaseScreen"
-        signalFoxId="expo_secondary_go_purchase"
+        signalFoxNodeId="expo_secondary_go_purchase"
         onPress={() => {
           logDemoEvent('expo_secondary_go_purchase');
           router.push('/purchase');
@@ -25,7 +25,7 @@ export default function SecondaryFlowScreen() {
       />
       <ActionButton
         label="Back to Home"
-        signalFoxId="expo_secondary_back_home"
+        signalFoxNodeId="expo_secondary_back_home"
         variant="secondary"
         onPress={() => {
           logDemoEvent('expo_secondary_back_home');
@@ -34,7 +34,7 @@ export default function SecondaryFlowScreen() {
       />
       <ActionButton
         label="Analytics click with no action"
-        signalFoxId="expo_secondary_idle_click"
+        signalFoxNodeId="expo_secondary_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('expo_secondary_idle_click');

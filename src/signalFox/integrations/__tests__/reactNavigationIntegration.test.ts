@@ -154,7 +154,7 @@ describe('reactNavigationIntegration', () => {
     expect(modalOpenEvents).toHaveLength(1);
     expect(modalOpenEvents[0]).toEqual(
       expect.objectContaining({
-        signalFoxId: 'ProfileModal',
+        signalFoxNodeId: 'ProfileModal',
         payload: expect.objectContaining({
           source: 'react_navigation',
           presentation: 'modal',
@@ -201,7 +201,7 @@ describe('reactNavigationIntegration', () => {
     expect(modalCloseEvents).toHaveLength(1);
     expect(modalCloseEvents[0]).toEqual(
       expect.objectContaining({
-        signalFoxId: 'ProfileModal',
+        signalFoxNodeId: 'ProfileModal',
         payload: expect.objectContaining({
           source: 'react_navigation',
           parent_modal: null,
@@ -314,7 +314,7 @@ describe('reactNavigationIntegration', () => {
     const modalOpenEvent = getEventsByType(core.trackEvent, 'modal_open')[0];
     expect(modalOpenEvent).toEqual(
       expect.objectContaining({
-        signalFoxId: 'CheckoutModal',
+        signalFoxNodeId: 'CheckoutModal',
         payload: expect.objectContaining({
           parent_modal: 'native-paywall',
           presentation: 'transparentModal',
@@ -396,7 +396,7 @@ describe('reactNavigationIntegration', () => {
     expect(modalOpenEvents).toHaveLength(2);
     expect(modalOpenEvents[1]).toEqual(
       expect.objectContaining({
-        signalFoxId: 'ModalB',
+        signalFoxNodeId: 'ModalB',
         payload: expect.objectContaining({
           parent_modal: 'ModalA',
         }),
@@ -430,7 +430,7 @@ describe('reactNavigationIntegration', () => {
     expect(modalCloseEvents).toHaveLength(1);
     expect(modalCloseEvents[0]).toEqual(
       expect.objectContaining({
-        signalFoxId: 'ModalB',
+        signalFoxNodeId: 'ModalB',
         payload: expect.objectContaining({
           parent_modal: 'ModalA',
           currentScreen: 'ModalA',

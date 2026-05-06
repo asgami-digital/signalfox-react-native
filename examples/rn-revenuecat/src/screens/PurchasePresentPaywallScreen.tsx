@@ -44,7 +44,7 @@ export function PurchasePresentPaywallScreen() {
 
       <ActionButton
         label="Present paywall"
-        signalFoxId="present_paywall_button"
+        signalFoxNodeId="present_paywall_button"
         onPress={() => {
           presentRevenueCatPaywall(offering)
             .then(handlePaywallResult)
@@ -59,7 +59,7 @@ export function PurchasePresentPaywallScreen() {
 
       <ActionButton
         label="Present paywall if needed"
-        signalFoxId="present_paywall_if_needed_button"
+        signalFoxNodeId="present_paywall_if_needed_button"
         variant="secondary"
         onPress={() => {
           presentRevenueCatPaywallIfNeeded(offering)
@@ -75,7 +75,7 @@ export function PurchasePresentPaywallScreen() {
 
       <ActionButton
         label="Analytics click without purchase"
-        signalFoxId="present_paywall_idle_click"
+        signalFoxNodeId="present_paywall_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('present_paywall_idle_click');

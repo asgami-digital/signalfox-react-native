@@ -3,16 +3,16 @@ import 'react-native';
 
 declare module 'react' {
   interface Attributes {
-    signalFoxId?: string;
-    signalFoxDisplayName?: string;
+    signalFoxNodeId?: string;
+    signalFoxNodeDisplayName?: string;
   }
 }
 
 /** Host components use `ViewProps`, not `React.Attributes` (see RN typings). */
 declare module 'react-native' {
   interface ViewProps {
-    signalFoxId?: string;
-    signalFoxDisplayName?: string;
+    signalFoxNodeId?: string;
+    signalFoxNodeDisplayName?: string;
   }
 }
 

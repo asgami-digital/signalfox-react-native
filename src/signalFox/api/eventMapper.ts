@@ -99,8 +99,11 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
   const triple = getCanonicalTriple(internalType);
   const payload = getPayload(raw);
   const signalFoxId =
-    pickOptionalString(raw.signalFoxId) ?? pickOptionalString(raw.target_id);
+    pickOptionalString(raw.signalFoxNodeId) ??
+    pickOptionalString(raw.signalFoxId) ??
+    pickOptionalString(raw.target_id);
   const signalFoxDisplayName =
+    pickOptionalString(raw.signalFoxNodeDisplayName) ??
     pickOptionalString(raw.signalFoxDisplayName) ??
     pickOptionalString(raw.target_name);
 
@@ -161,11 +164,13 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
         pickOptionalString(payload?.screen_name) ??
         pickOptionalString(payload?.screenName);
       const subview =
+        pickOptionalString(raw.signalFoxNodeId) ??
         pickOptionalString(raw.signalFoxId) ??
         pickOptionalString(raw.target_id) ??
         pickOptionalString(payload?.subview_name) ??
         pickOptionalString(payload?.subviewName);
       const subviewDisplayName =
+        pickOptionalString(raw.signalFoxNodeDisplayName) ??
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name) ??
         subview;
@@ -192,10 +197,12 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     case 'modal_open':
     case 'modal_close': {
       const targetId =
+        pickOptionalString(raw.signalFoxNodeId) ??
         pickOptionalString(raw.signalFoxId) ??
         pickOptionalString(raw.target_id) ??
         pickOptionalString(raw.modal_name);
       const targetName =
+        pickOptionalString(raw.signalFoxNodeDisplayName) ??
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name) ??
         targetId;
@@ -221,9 +228,11 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     case 'component_press': {
       base.screen_name = pickOptionalString(raw.screen_name);
       base.target_id =
+        pickOptionalString(raw.signalFoxNodeId) ??
         pickOptionalString(raw.signalFoxId) ??
         pickOptionalString(raw.target_id);
       base.target_name =
+        pickOptionalString(raw.signalFoxNodeDisplayName) ??
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name);
       base.target_type = pickOptionalString(raw.target_type) ?? 'unknown';
@@ -235,11 +244,14 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
       base.flow_name = pickOptionalString(raw.flow_name);
       base.step_name =
         pickOptionalString(raw.step_name) ??
+        pickOptionalString(raw.signalFoxNodeId) ??
         pickOptionalString(raw.signalFoxId);
       base.target_id =
+        pickOptionalString(raw.signalFoxNodeId) ??
         pickOptionalString(raw.signalFoxId) ??
         pickOptionalString(raw.target_id);
       base.target_name =
+        pickOptionalString(raw.signalFoxNodeDisplayName) ??
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name) ??
         base.step_name;
@@ -270,10 +282,12 @@ export function toBackendEventDto(event: AnalyticsEvent): BackendEventDto {
     default: {
       // purchase_*, lifecycle (sin payload rico), etc.
       base.target_id =
+        pickOptionalString(raw.signalFoxNodeId) ??
         pickOptionalString(raw.signalFoxId) ??
         pickOptionalString(raw.target_id) ??
         base.target_id;
       base.target_name =
+        pickOptionalString(raw.signalFoxNodeDisplayName) ??
         pickOptionalString(raw.signalFoxDisplayName) ??
         pickOptionalString(raw.target_name) ??
         base.target_name;

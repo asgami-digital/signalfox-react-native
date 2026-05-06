@@ -26,10 +26,10 @@ type TrackableCore = {
 
 function getRenderedModalNode(
   tree: ReactTestRenderer,
-  signalFoxId: string
+  signalFoxNodeId: string
 ): { props: { onShow?: () => void } } {
   return tree.root
-    .findAllByProps({ signalFoxId })
+    .findAllByProps({ signalFoxNodeId })
     .find((node) => typeof node.props.onShow === 'function') as {
     props: { onShow?: () => void };
   };
@@ -75,14 +75,14 @@ describe('reactNativeModalPatch', () => {
     let tree!: ReactTestRenderer;
 
     act(() => {
-      tree = create(<Modal visible signalFoxId="rating-modal" />);
+      tree = create(<Modal visible signalFoxNodeId="rating-modal" />);
     });
 
     expect(trackEvent).toHaveBeenCalledTimes(1);
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'rating-modal',
+        signalFoxNodeId: 'rating-modal',
         payload: expect.objectContaining({
           parent_modal: null,
         }),
@@ -104,14 +104,14 @@ describe('reactNativeModalPatch', () => {
     let tree!: ReactTestRenderer;
 
     act(() => {
-      tree = create(<Modal signalFoxId="conditional-modal" />);
+      tree = create(<Modal signalFoxNodeId="conditional-modal" />);
     });
 
     expect(trackEvent).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'conditional-modal',
+        signalFoxNodeId: 'conditional-modal',
         payload: expect.objectContaining({
           parent_modal: null,
         }),
@@ -127,7 +127,7 @@ describe('reactNativeModalPatch', () => {
       2,
       expect.objectContaining({
         type: 'modal_close',
-        signalFoxId: 'conditional-modal',
+        signalFoxNodeId: 'conditional-modal',
         payload: expect.objectContaining({
           parent_modal: null,
         }),
@@ -143,11 +143,11 @@ describe('reactNativeModalPatch', () => {
     let tree!: ReactTestRenderer;
 
     act(() => {
-      tree = create(<Modal visible={false} signalFoxId="ghost-modal" />);
+      tree = create(<Modal visible={false} signalFoxNodeId="ghost-modal" />);
     });
 
     act(() => {
-      tree.update(<Modal visible={false} signalFoxId="ghost-modal" />);
+      tree.update(<Modal visible={false} signalFoxNodeId="ghost-modal" />);
     });
 
     expect(trackEvent).not.toHaveBeenCalled();
@@ -161,20 +161,20 @@ describe('reactNativeModalPatch', () => {
     let tree!: ReactTestRenderer;
 
     act(() => {
-      tree = create(<Modal visible={false} signalFoxId="slide-modal" />);
+      tree = create(<Modal visible={false} signalFoxNodeId="slide-modal" />);
     });
 
     expect(trackEvent).not.toHaveBeenCalled();
 
     act(() => {
-      tree.update(<Modal visible signalFoxId="slide-modal" />);
+      tree.update(<Modal visible signalFoxNodeId="slide-modal" />);
     });
 
     expect(trackEvent).toHaveBeenCalledTimes(1);
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'slide-modal',
+        signalFoxNodeId: 'slide-modal',
       })
     );
     expect(getActiveModalId()).toBe('slide-modal');
@@ -187,25 +187,25 @@ describe('reactNativeModalPatch', () => {
     let tree!: ReactTestRenderer;
 
     act(() => {
-      tree = create(<Modal visible signalFoxId="result-modal" />);
+      tree = create(<Modal visible signalFoxNodeId="result-modal" />);
     });
 
     act(() => {
-      tree.update(<Modal visible={false} signalFoxId="result-modal" />);
+      tree.update(<Modal visible={false} signalFoxNodeId="result-modal" />);
     });
 
     expect(trackEvent).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'result-modal',
+        signalFoxNodeId: 'result-modal',
       })
     );
     expect(trackEvent).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         type: 'modal_close',
-        signalFoxId: 'result-modal',
+        signalFoxNodeId: 'result-modal',
         payload: expect.objectContaining({
           parent_modal: null,
         }),
@@ -216,7 +216,7 @@ describe('reactNativeModalPatch', () => {
     cleanup();
   });
 
-  it('envia signalFoxDisplayName cuando el modal lo define', () => {
+  it('envia signalFoxNodeDisplayName cuando el modal lo define', () => {
     const { Modal, cleanup, trackEvent } = setupPatchedModal();
     let tree!: ReactTestRenderer;
 
@@ -224,8 +224,8 @@ describe('reactNativeModalPatch', () => {
       tree = create(
         <Modal
           visible
-          signalFoxId="paywall-modal"
-          signalFoxDisplayName="Paywall principal"
+          signalFoxNodeId="paywall-modal"
+          signalFoxNodeDisplayName="Paywall principal"
         />
       );
     });
@@ -233,8 +233,8 @@ describe('reactNativeModalPatch', () => {
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'paywall-modal',
-        signalFoxDisplayName: 'Paywall principal',
+        signalFoxNodeId: 'paywall-modal',
+        signalFoxNodeDisplayName: 'Paywall principal',
       })
     );
 
@@ -258,13 +258,13 @@ describe('reactNativeModalPatch', () => {
     });
 
     act(() => {
-      tree = create(<Modal visible signalFoxId="native-modal" />);
+      tree = create(<Modal visible signalFoxNodeId="native-modal" />);
     });
 
     expect(trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'modal_open',
-        signalFoxId: 'native-modal',
+        signalFoxNodeId: 'native-modal',
         payload: expect.objectContaining({
           parent_modal: 'navigation-modal',
         }),
@@ -282,14 +282,14 @@ describe('reactNativeModalPatch', () => {
     ]);
 
     act(() => {
-      tree.update(<Modal visible={false} signalFoxId="native-modal" />);
+      tree.update(<Modal visible={false} signalFoxNodeId="native-modal" />);
     });
 
     expect(trackEvent).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         type: 'modal_close',
-        signalFoxId: 'native-modal',
+        signalFoxNodeId: 'native-modal',
         payload: expect.objectContaining({
           parent_modal: 'navigation-modal',
         }),

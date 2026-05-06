@@ -183,7 +183,7 @@ export default function PurchaseScreen() {
 
       <ActionButton
         label="Reconnect and reload"
-        signalFoxId="expo_purchase_reload_store"
+        signalFoxNodeId="expo_purchase_reload_store"
         variant="ghost"
         onPress={() => {
           connectAndLoad().catch(() => {});
@@ -191,14 +191,14 @@ export default function PurchaseScreen() {
       />
       <ActionButton
         label="Buy subscription"
-        signalFoxId="expo_purchase_buy_subscription"
+        signalFoxNodeId="expo_purchase_buy_subscription"
         onPress={() => {
           buySubscription().catch(() => {});
         }}
       />
       <ActionButton
         label="Restore purchases"
-        signalFoxId="expo_purchase_restore_purchases"
+        signalFoxNodeId="expo_purchase_restore_purchases"
         variant="secondary"
         onPress={() => {
           restoreStorePurchases().catch(() => {});
@@ -206,7 +206,7 @@ export default function PurchaseScreen() {
       />
       <ActionButton
         label="Analytics click without purchase"
-        signalFoxId="expo_purchase_idle_click"
+        signalFoxNodeId="expo_purchase_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('expo_purchase_idle_click');

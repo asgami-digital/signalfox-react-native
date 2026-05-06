@@ -26,7 +26,7 @@ export default function HomeScreen() {
 
       <ActionButton
         label="PurchaseScreen"
-        signalFoxId="expo_home_go_purchase"
+        signalFoxNodeId="expo_home_go_purchase"
         onPress={() => {
           logDemoEvent('navigate_purchase');
           router.push('/purchase');
@@ -34,7 +34,7 @@ export default function HomeScreen() {
       />
       <ActionButton
         label="ModalExample"
-        signalFoxId="expo_home_go_modal_example"
+        signalFoxNodeId="expo_home_go_modal_example"
         variant="secondary"
         onPress={() => {
           logDemoEvent('navigate_modal_example');
@@ -43,7 +43,7 @@ export default function HomeScreen() {
       />
       <ActionButton
         label="SecondaryFlowScreen"
-        signalFoxId="expo_home_go_secondary_flow"
+        signalFoxNodeId="expo_home_go_secondary_flow"
         onPress={() => {
           logDemoEvent('navigate_secondary_flow');
           router.push('/secondary-flow');
@@ -51,7 +51,7 @@ export default function HomeScreen() {
       />
       <ActionButton
         label="Open navigation modal"
-        signalFoxId="expo_home_open_navigation_modal"
+        signalFoxNodeId="expo_home_open_navigation_modal"
         variant="ghost"
         onPress={() => {
           logDemoEvent('navigate_navigation_modal');
@@ -60,7 +60,7 @@ export default function HomeScreen() {
       />
       <ActionButton
         label="Analytics click with no action"
-        signalFoxId="expo_home_idle_click"
+        signalFoxNodeId="expo_home_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('expo_home_idle_click');

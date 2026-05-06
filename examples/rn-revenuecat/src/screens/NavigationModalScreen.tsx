@@ -20,7 +20,7 @@ export function NavigationModalScreen({ navigation }: Props) {
 
       <ActionButton
         label="Close modal"
-        signalFoxId="navigation_modal_close"
+        signalFoxNodeId="navigation_modal_close"
         onPress={() => {
           logDemoEvent('close_navigation_modal');
           navigation.goBack();
@@ -28,7 +28,7 @@ export function NavigationModalScreen({ navigation }: Props) {
       />
       <ActionButton
         label="Test click"
-        signalFoxId="navigation_modal_idle_click"
+        signalFoxNodeId="navigation_modal_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('navigation_modal_idle_click');

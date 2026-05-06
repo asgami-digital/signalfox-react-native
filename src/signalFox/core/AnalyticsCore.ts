@@ -707,10 +707,16 @@ export class AnalyticsCore implements IAnalyticsCore {
     const family = getCanonicalTriple(event.type).event_family;
     const explicitSignalFoxId =
       this.pickOptionalString(
+        (event as { signalFoxNodeId?: unknown }).signalFoxNodeId
+      ) ??
+      this.pickOptionalString(
         (event as { signalFoxId?: unknown }).signalFoxId
       ) ??
       this.pickOptionalString((event as { target_id?: unknown }).target_id);
     const explicitSignalFoxDisplayName =
+      this.pickOptionalString(
+        (event as { signalFoxNodeDisplayName?: unknown }).signalFoxNodeDisplayName
+      ) ??
       this.pickOptionalString(
         (event as { signalFoxDisplayName?: unknown }).signalFoxDisplayName
       ) ??
@@ -718,7 +724,7 @@ export class AnalyticsCore implements IAnalyticsCore {
     const usesOnlyExplicitIdentifiers = usesExplicitUiIdentifiersOnly(
       event.type
     );
-    const signalFoxIdComputed =
+    const signalFoxNodeIdComputed =
       explicitSignalFoxId ??
       (usesOnlyExplicitIdentifiers
         ? null
@@ -731,16 +737,16 @@ export class AnalyticsCore implements IAnalyticsCore {
               (event as { step_name?: unknown }).step_name
             ),
           }));
-    const signalFoxId = nullIfEmptySignalFoxId(signalFoxIdComputed);
-    const signalFoxDisplayName =
+    const signalFoxNodeId = nullIfEmptySignalFoxId(signalFoxNodeIdComputed);
+    const signalFoxNodeDisplayName =
       explicitSignalFoxDisplayName ??
       (usesOnlyExplicitIdentifiers
-        ? signalFoxId
+        ? signalFoxNodeId
         : buildGenericDisplayName({
             eventType: event.type,
             screenName: resolvedScreenName,
             payload: nextPayload,
-            fallbackId: signalFoxId,
+            fallbackId: signalFoxNodeId,
             customEventName: this.pickOptionalString(
               (event as { custom_event_name?: unknown }).custom_event_name
             ),
@@ -757,8 +763,9 @@ export class AnalyticsCore implements IAnalyticsCore {
       app_version: this.appVersion,
       device_model: this.deviceModel,
       os_version: this.osVersion,
-      signalFoxId,
-      signalFoxDisplayName,
+      // Network contract: backend expects signalFoxId/signalFoxDisplayName.
+      signalFoxId: signalFoxNodeId,
+      signalFoxDisplayName: signalFoxNodeDisplayName,
       ...(resolvedScreenName ? { screen_name: resolvedScreenName } : {}),
     } as AnalyticsEvent;
 
@@ -875,8 +882,8 @@ export class AnalyticsCore implements IAnalyticsCore {
     const ev: Record<string, unknown> = {
       type: 'flow_step_view',
       flow_name: funnelName,
-      signalFoxId: step,
-      ...(stepDisplayName ? { signalFoxDisplayName: stepDisplayName } : {}),
+      signalFoxNodeId: step,
+      ...(stepDisplayName ? { signalFoxNodeDisplayName: stepDisplayName } : {}),
       step_name: step,
       payload: {},
     };
@@ -915,9 +922,9 @@ export class AnalyticsCore implements IAnalyticsCore {
 
     this.trackEvent({
       type: 'subview_view',
-      signalFoxId: subviewName,
+      signalFoxNodeId: subviewName,
       ...(subviewDisplayName
-        ? { signalFoxDisplayName: subviewDisplayName }
+        ? { signalFoxNodeDisplayName: subviewDisplayName }
         : {}),
       target_type: 'subview',
       flow_name: null,

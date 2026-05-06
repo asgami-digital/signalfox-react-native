@@ -41,12 +41,15 @@ project.xcworkspace
 local.properties
 android.iml
 
-# Cocoapods
+# CocoaPods
 #
 example/ios/Pods
+examples/**/ios/Pods/
 
-# Ruby
+# Ruby / Bundler (bundle install --path vendor/bundle, etc.)
+#
 example/vendor/
+examples/**/vendor/
 
 # node.js
 #
@@ -87,3 +90,6 @@ android/generated
 
 # React Native Nitro Modules
 nitrogen/
+examples/rn-revenuecat/Gemfile.lock
+examples/rn-revenuecat/ios/Podfile.lock
+examples/rn-revenuecat/ios/Podfile.lock

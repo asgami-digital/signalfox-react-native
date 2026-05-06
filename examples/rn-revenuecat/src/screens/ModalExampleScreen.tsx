@@ -20,7 +20,7 @@ export function ModalExampleScreen() {
 
       <ActionButton
         label="Open native modal"
-        signalFoxId="modal_example_open_native_modal"
+        signalFoxNodeId="modal_example_open_native_modal"
         onPress={() => {
           logDemoEvent('open_native_modal');
           setIsVisible(true);
@@ -28,7 +28,7 @@ export function ModalExampleScreen() {
       />
       <ActionButton
         label="Test click"
-        signalFoxId="modal_example_idle_click"
+        signalFoxNodeId="modal_example_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('modal_example_idle_click');
@@ -36,7 +36,7 @@ export function ModalExampleScreen() {
       />
 
       <Modal
-        signalFoxId="modal_example_native_modal"
+        signalFoxNodeId="modal_example_native_modal"
         animationType="slide"
         transparent
         visible={isVisible}
@@ -51,7 +51,7 @@ export function ModalExampleScreen() {
             </Text>
             <ActionButton
               label="Trigger alert"
-              signalFoxId="modal_example_alert_button"
+              signalFoxNodeId="modal_example_alert_button"
               variant="secondary"
               onPress={() => {
                 logDemoEvent('native_modal_alert');
@@ -60,7 +60,7 @@ export function ModalExampleScreen() {
             />
             <ActionButton
               label="Close modal"
-              signalFoxId="modal_example_close_native_modal"
+              signalFoxNodeId="modal_example_close_native_modal"
               variant="ghost"
               onPress={() => {
                 logDemoEvent('close_native_modal');

@@ -327,7 +327,7 @@ function emitNavigationModalOpen(
 
   core.trackEvent({
     type: 'modal_open',
-    signalFoxId: route.name,
+    signalFoxNodeId: route.name,
     target_type: 'modal',
     payload: {
       modalName: route.name,
@@ -352,7 +352,7 @@ function emitNavigationModalClose(
 
   core.trackEvent({
     type: 'modal_close',
-    signalFoxId: route.name,
+    signalFoxNodeId: route.name,
     target_type: 'modal',
     payload: {
       modalName: route.name,

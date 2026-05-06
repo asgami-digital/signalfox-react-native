@@ -21,8 +21,8 @@ function setModalPatchTrack(fn: TrackFn | null): void {
 
 type ModalPropsLike = {
   visible?: boolean;
-  signalFoxId?: string;
-  signalFoxDisplayName?: string;
+  signalFoxNodeId?: string;
+  signalFoxNodeDisplayName?: string;
   children?: unknown;
   onDismiss?: unknown;
   onRequestClose?: unknown;
@@ -31,16 +31,16 @@ type ModalPropsLike = {
 
 let OriginalModal: React.ComponentType<any>;
 
-/** Solo signalFoxId */
+/** Solo signalFoxNodeId */
 function inferModalTargetFromProps(props: ModalPropsLike): string | null {
-  if (typeof props.signalFoxId !== 'string') return null;
-  const t = props.signalFoxId.trim();
+  if (typeof props.signalFoxNodeId !== 'string') return null;
+  const t = props.signalFoxNodeId.trim();
   return t.length > 0 ? t : null;
 }
 
 function inferModalDisplayNameFromProps(props: ModalPropsLike): string | null {
-  return typeof props.signalFoxDisplayName === 'string'
-    ? props.signalFoxDisplayName
+  return typeof props.signalFoxNodeDisplayName === 'string'
+    ? props.signalFoxNodeDisplayName
     : null;
 }
 
@@ -75,8 +75,8 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     if (!track) return;
     track({
       type: 'modal_open',
-      signalFoxId: targetId,
-      ...(targetName ? { signalFoxDisplayName: targetName } : {}),
+      signalFoxNodeId: targetId,
+      ...(targetName ? { signalFoxNodeDisplayName: targetName } : {}),
       target_type: 'modal',
       payload: {
         modalName: targetId,
@@ -106,8 +106,8 @@ function PatchedModal(props: ModalPropsLike): React.JSX.Element {
     if (!track) return;
     track({
       type: 'modal_close',
-      signalFoxId: targetId,
-      ...(targetName ? { signalFoxDisplayName: targetName } : {}),
+      signalFoxNodeId: targetId,
+      ...(targetName ? { signalFoxNodeDisplayName: targetName } : {}),
       target_type: 'modal',
       payload: {
         modalName: targetId,

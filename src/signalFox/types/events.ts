@@ -34,8 +34,8 @@ export interface BaseAnalyticsEvent {
   app_version?: string;
   device_model?: string | null;
   os_version?: string | null;
-  signalFoxId?: string | null;
-  signalFoxDisplayName?: string | null;
+  signalFoxNodeId?: string | null;
+  signalFoxNodeDisplayName?: string | null;
 }
 
 export interface ScreenViewEvent extends BaseAnalyticsEvent {
@@ -62,8 +62,8 @@ export interface ModalEventPayload {
 
 export interface ModalEvent extends BaseAnalyticsEvent {
   type: 'modal_open' | 'modal_close';
-  signalFoxId: string | null;
-  signalFoxDisplayName?: string | null;
+  signalFoxNodeId: string | null;
+  signalFoxNodeDisplayName?: string | null;
   target_type: 'modal';
   payload: ModalEventPayload;
 }
@@ -76,8 +76,8 @@ export interface ComponentPressPayload {
 
 export interface ComponentPressEvent extends BaseAnalyticsEvent {
   type: 'component_press';
-  signalFoxId: string | null;
-  signalFoxDisplayName?: string | null;
+  signalFoxNodeId: string | null;
+  signalFoxNodeDisplayName?: string | null;
   target_type: 'button' | 'touchable' | 'tab' | 'unknown';
   payload: ComponentPressPayload;
 }
@@ -97,8 +97,8 @@ export type SubviewParams = {
 
 export interface SubviewViewEvent extends BaseAnalyticsEvent {
   type: 'subview_view';
-  signalFoxId: string;
-  signalFoxDisplayName?: string | null;
+  signalFoxNodeId: string;
+  signalFoxNodeDisplayName?: string | null;
   target_type: 'subview';
   flow_name: null;
   step_name: null;
@@ -109,8 +109,8 @@ export interface SubviewViewEvent extends BaseAnalyticsEvent {
 export interface FlowStepViewEvent extends BaseAnalyticsEvent {
   type: 'flow_step_view';
   flow_name: string;
-  signalFoxId: string;
-  signalFoxDisplayName?: string | null;
+  signalFoxNodeId: string;
+  signalFoxNodeDisplayName?: string | null;
   step_name: string;
   step_index?: number;
   payload?: Record<string, unknown>;

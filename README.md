@@ -2,7 +2,7 @@
 
 SignalFox for React Native is the official client library for instrumenting your app with SignalFox.
 
-It helps you track app lifecycle, native modals, native touchables, navigation, and purchase flows with a single imperative `SignalFox.init()` at startup. It also lets you assign stable `signalFoxId` values to the UI elements that matter most, so SignalFox can build a consistent understanding of your app structure over time.
+It helps you track app lifecycle, native modals, native touchables, navigation, and purchase flows with a single imperative `SignalFox.init()` at startup. It also lets you assign stable `signalFoxNodeId` values to the UI elements that matter most, so SignalFox can build a consistent understanding of your app structure over time.
 
 ## Links
 
@@ -19,7 +19,7 @@ Use this library when you want to:
 - automatically track app lifecycle events
 - enable tracking for native modals and native touchables at startup
 - add optional integrations such as React Navigation, RevenueCat, or `react-native-iap`
-- assign stable `signalFoxId` values to screens, modals, and interactive elements you want SignalFox to understand
+- assign stable `signalFoxNodeId` values to screens, modals, and interactive elements you want SignalFox to understand
 
 ## Installation
 
@@ -262,11 +262,11 @@ useEffect(() => {
 }, []);
 ```
 
-## `signalFoxId` Requirements
+## `signalFoxNodeId` Requirements
 
-To make touchable and modal tracking reliable, you must add a unique `signalFoxId` to every native touchable and every native modal you want SignalFox to track.
+To make touchable and modal tracking reliable, you must add a unique `signalFoxNodeId` to every native touchable and every native modal you want SignalFox to track.
 
-A good `signalFoxId` should be:
+A good `signalFoxNodeId` should be:
 
 - unique within the app
 - stable over time
@@ -288,14 +288,14 @@ Avoid:
 ### Touchable Example
 
 ```tsx
-<Pressable signalFoxId="checkout-pay-button" onPress={handlePay}>
+<Pressable signalFoxNodeId="checkout-pay-button" onPress={handlePay}>
   <Text>Pay now</Text>
 </Pressable>
 ```
 
 ```tsx
 <TouchableOpacity
-  signalFoxId="profile-edit-photo-button"
+  signalFoxNodeId="profile-edit-photo-button"
   onPress={handleEditPhoto}
 >
   <Text>Edit photo</Text>
@@ -307,14 +307,14 @@ Avoid:
 ```tsx
 <Modal
   visible={isOpen}
-  signalFoxId="purchase-paywall-modal"
+  signalFoxNodeId="purchase-paywall-modal"
   onRequestClose={handleClose}
 >
   {/* modal content */}
 </Modal>
 ```
 
-You can also provide `signalFoxDisplayName` when you want a separate human-readable label, but `signalFoxId` is the required identifier.
+You can also provide `signalFoxNodeDisplayName` when you want a separate human-readable label, but `signalFoxNodeId` is the required identifier.
 
 ## Manual Tracking
 

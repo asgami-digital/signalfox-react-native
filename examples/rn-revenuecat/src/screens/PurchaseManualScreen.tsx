@@ -59,7 +59,7 @@ export function PurchaseManualScreen() {
 
       <ActionButton
         label="Reload products"
-        signalFoxId="manual_purchase_reload_products"
+        signalFoxNodeId="manual_purchase_reload_products"
         variant="ghost"
         onPress={() => {
           logDemoEvent('manual_reload_products');
@@ -68,7 +68,7 @@ export function PurchaseManualScreen() {
       />
       <ActionButton
         label="Buy subscription"
-        signalFoxId="manual_purchase_buy_product"
+        signalFoxNodeId="manual_purchase_buy_product"
         onPress={() => {
           purchaseConfiguredProduct().catch((error) => {
             logDemoEvent('manual_purchase_error', {
@@ -80,7 +80,7 @@ export function PurchaseManualScreen() {
       />
       <ActionButton
         label="Restore purchases"
-        signalFoxId="manual_purchase_restore_purchases"
+        signalFoxNodeId="manual_purchase_restore_purchases"
         variant="secondary"
         onPress={() => {
           restoreRevenueCatPurchases()
@@ -103,7 +103,7 @@ export function PurchaseManualScreen() {
       />
       <ActionButton
         label="Analytics click with no action"
-        signalFoxId="manual_purchase_idle_click"
+        signalFoxNodeId="manual_purchase_idle_click"
         variant="ghost"
         onPress={() => {
           logDemoEvent('manual_idle_click');
