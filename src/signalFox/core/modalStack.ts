@@ -25,6 +25,7 @@ type ModalStackEntryInput =
     };
 
 const modalStack: ModalStackEntry[] = [];
+let pendingActiveModal: ModalStackEntry | null = null;
 
 function normalizeModalStackEntry(
   entry: ModalStackEntryInput
@@ -78,12 +79,15 @@ function maybeLogModalStack(action: string, modalId?: string | null): void {
 }
 
 export function getActiveModalId(): string | null {
-  if (modalStack.length === 0) return null;
-  const last = modalStack[modalStack.length - 1];
+  const last = pendingActiveModal ?? getCommittedActiveModalEntry();
   return typeof last?.id === 'string' && last.id.length > 0 ? last.id : null;
 }
 
 export function getActiveModalEntry(): ModalStackEntry | null {
+  return pendingActiveModal ?? getCommittedActiveModalEntry();
+}
+
+function getCommittedActiveModalEntry(): ModalStackEntry | null {
   if (modalStack.length === 0) return null;
   return modalStack[modalStack.length - 1] ?? null;
 }
@@ -106,7 +110,13 @@ export function modalStackPush(entry: ModalStackEntryInput): string | null {
   const normalized = normalizeModalStackEntry(entry);
   if (!normalized) return getActiveModalId();
 
-  const previousActiveModalId = getActiveModalId();
+  const previousActiveModalId = getCommittedActiveModalEntry()?.id ?? null;
+  if (
+    pendingActiveModal?.id === normalized.id &&
+    pendingActiveModal.stackKey === normalized.stackKey
+  ) {
+    pendingActiveModal = null;
+  }
   modalStack.push(normalized);
   maybeLogModalStack('push', normalized.id);
   return previousActiveModalId;
@@ -137,9 +147,14 @@ export function modalStackPop(stackKeyOrId?: string | null): string | null {
   }
 
   maybeLogModalStack('pop', stackKeyOrId);
-  return getActiveModalId();
+  return getCommittedActiveModalEntry()?.id ?? null;
 }
 
 export function resetModalStack(): void {
   modalStack.splice(0, modalStack.length);
+  pendingActiveModal = null;
+}
+
+export function setPendingActiveModal(entry: ModalStackEntry | null): void {
+  pendingActiveModal = entry;
 }

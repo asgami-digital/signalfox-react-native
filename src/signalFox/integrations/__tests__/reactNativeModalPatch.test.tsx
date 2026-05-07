@@ -67,6 +67,7 @@ function setupPatchedModal() {
 
 describe('reactNativeModalPatch', () => {
   afterEach(() => {
+    jest.useRealTimers();
     resetModalStack();
   });
 
@@ -248,6 +249,7 @@ describe('reactNativeModalPatch', () => {
   });
 
   it('apila un modal nativo sobre un navigation modal existente', () => {
+    jest.useFakeTimers();
     const { Modal, cleanup, trackEvent } = setupPatchedModal();
     let tree!: ReactTestRenderer;
 
@@ -259,6 +261,19 @@ describe('reactNativeModalPatch', () => {
 
     act(() => {
       tree = create(<Modal visible signalFoxNodeId="native-modal" />);
+    });
+
+    expect(trackEvent).not.toHaveBeenCalled();
+    expect(getActiveModalId()).toBe('native-modal');
+    expect(getModalStackSnapshot()).toEqual([
+      expect.objectContaining({
+        id: 'navigation-modal',
+        source: 'react_navigation',
+      }),
+    ]);
+
+    act(() => {
+      jest.advanceTimersByTime(32);
     });
 
     expect(trackEvent).toHaveBeenCalledWith(
@@ -301,6 +316,90 @@ describe('reactNativeModalPatch', () => {
         source: 'react_navigation',
       }),
     ]);
+
+    cleanup();
+  });
+
+  it('reordena close del modal anterior antes del open del nuevo modal nativo', () => {
+    jest.useFakeTimers();
+    const { Modal, cleanup, trackEvent } = setupPatchedModal();
+    let tree!: ReactTestRenderer;
+
+    act(() => {
+      tree = create(
+        <>
+          <Modal
+            key="processing-modal"
+            visible
+            signalFoxNodeId="processing-modal"
+          />
+        </>
+      );
+    });
+
+    act(() => {
+      tree.update(
+        <>
+          <Modal
+            key="processing-modal"
+            visible
+            signalFoxNodeId="processing-modal"
+          />
+          <Modal key="result-modal" visible signalFoxNodeId="result-modal" />
+        </>
+      );
+    });
+
+    expect(trackEvent).toHaveBeenCalledTimes(1);
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxNodeId: 'processing-modal',
+      })
+    );
+    expect(getActiveModalId()).toBe('result-modal');
+
+    act(() => {
+      tree.update(
+        <>
+          <Modal
+            key="processing-modal"
+            visible={false}
+            signalFoxNodeId="processing-modal"
+          />
+          <Modal key="result-modal" visible signalFoxNodeId="result-modal" />
+        </>
+      );
+    });
+
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxNodeId: 'processing-modal',
+      })
+    );
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: 'modal_close',
+        signalFoxNodeId: 'processing-modal',
+        payload: expect.objectContaining({
+          parent_modal: null,
+        }),
+      })
+    );
+    expect(trackEvent).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        type: 'modal_open',
+        signalFoxNodeId: 'result-modal',
+        payload: expect.objectContaining({
+          parent_modal: null,
+        }),
+      })
+    );
 
     cleanup();
   });
